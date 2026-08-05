@@ -5,17 +5,20 @@ require_once($CFG->dirroot . '/mod/feedback/lib.php');
 
 $id = required_param('id', PARAM_INT);
 
-// Load and validate the course module.
+// Load and validate the Feedback course module.
 [$course, $cm] = get_course_and_cm_from_cmid($id, 'feedback');
 
-// Require the user to be authenticated and enrolled or otherwise authorised.
+// Require authentication and access to the course.
 require_course_login($course, true, $cm);
 
-// Create the activity context.
+// Create the module context.
 $context = context_module::instance($cm->id);
 
-// Use the same report permission used by the native Feedback reports.
-require_capability('mod/feedback:viewreports', $context);
+// Site administrators are allowed automatically.
+// Other users require the plugin capability.
+if (!is_siteadmin()) {
+    require_capability('local/feedbackdashboard:view', $context);
+}
 
 // Load the Feedback database record.
 $feedback = $DB->get_record(
@@ -61,8 +64,8 @@ $PAGE->set_heading(format_string($course->fullname));
 
 // Set the navigation item as active when possible.
 $dashboardnode = $PAGE->settingsnav->find(
-    'local_feedbackdashboard',
-    navigation_node::TYPE_SETTING
+    'feedbackdashboard',
+    navigation_node::TYPE_CUSTOM
 );
 
 if ($dashboardnode) {
