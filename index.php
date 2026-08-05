@@ -1,28 +1,30 @@
 <?php
+// This file is part of Moodle - https://moodle.org/
+
+/**
+ * Main page for the Feedback Dashboard plugin.
+ *
+ * @package    local_feedbackdashboard
+ * @copyright  2026 Marcus Vinícius Milan da Silva
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/feedback/lib.php');
 
-global $DB, $PAGE, $OUTPUT;
-
 $id = required_param('id', PARAM_INT);
 
-// Load and validate the Feedback course module.
+// Load and validate the Feedback activity.
 [$course, $cm] = get_course_and_cm_from_cmid($id, 'feedback');
 
-// Require authentication and access to the course.
 require_course_login($course, true, $cm);
 
-// Create the module context.
-/** @var context $context */
-$context = context_module::instance($cm->id, MUST_EXIST);
-assert($context instanceof context_module);
+$context = context_module::instance($cm->id);
 
-// Site administrators are allowed automatically.
-// Other users require the plugin capability.
-if (!is_siteadmin()) {
-    require_capability('local/feedbackdashboard:view', $context);
-}
+require_capability(
+    'local/feedbackdashboard:view',
+    $context
+);
 
 // Load the Feedback database record.
 $feedback = $DB->get_record(
@@ -32,39 +34,26 @@ $feedback = $DB->get_record(
     MUST_EXIST
 );
 
-// Count completed submissions.
-$responsecount = $DB->count_records(
-    'feedback_completed',
-    ['feedback' => $feedback->id]
-);
-
-// Count questions and other Feedback items.
-$questionscount = $DB->count_records_select(
-    'feedback_item',
-    'feedback = :feedbackid AND typ <> :labeltype AND typ <> :pagebreaktype',
-    [
-        'feedbackid' => $feedback->id,
-        'labeltype' => 'label',
-        'pagebreaktype' => 'pagebreak',
-    ]
-);
-
-// Configure the page URL.
 $pageurl = new moodle_url(
     '/local/feedbackdashboard/index.php',
     ['id' => $cm->id]
 );
 
+// Configure the page before generating the header/navigation.
 $PAGE->set_url($pageurl);
-$PAGE->set_context($context);
+$PAGE->set_course($course);
 $PAGE->set_cm($cm, $course);
+$PAGE->set_context($context);
 $PAGE->set_pagelayout('incourse');
 $PAGE->set_title(
-    get_string('dashboardtitle', 'local_feedbackdashboard') .
-    ': ' .
-    format_string($feedback->name)
+    get_string('dashboardtitle', 'local_feedbackdashboard')
+    . ': '
+    . format_string($feedback->name)
 );
 $PAGE->set_heading(format_string($course->fullname));
+
+// Explicitly mark Dashboard as the active tab.
+$PAGE->set_secondary_active_tab('feedbackdashboard');
 
 // Set the navigation item as active when possible.
 $dashboardnode = $PAGE->settingsnav->find(
