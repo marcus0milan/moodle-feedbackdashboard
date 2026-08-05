@@ -41,7 +41,9 @@ function local_feedbackdashboard_extend_settings_navigation(
     }
 
     // Always create the correct module context from the course module ID.
-    $modulecontext = context_module::instance($page->cm->id);
+    /** @var context $modulecontext */
+    $modulecontext = context_module::instance($page->cm->id, MUST_EXIST);
+    assert($modulecontext instanceof context_module);
 
     /*
      * Site administrators are explicitly allowed.

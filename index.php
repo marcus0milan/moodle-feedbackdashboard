@@ -3,6 +3,8 @@
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/feedback/lib.php');
 
+global $DB, $PAGE, $OUTPUT;
+
 $id = required_param('id', PARAM_INT);
 
 // Load and validate the Feedback course module.
@@ -12,7 +14,9 @@ $id = required_param('id', PARAM_INT);
 require_course_login($course, true, $cm);
 
 // Create the module context.
-$context = context_module::instance($cm->id);
+/** @var context $context */
+$context = context_module::instance($cm->id, MUST_EXIST);
+assert($context instanceof context_module);
 
 // Site administrators are allowed automatically.
 // Other users require the plugin capability.
