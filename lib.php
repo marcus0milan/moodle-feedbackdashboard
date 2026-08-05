@@ -3,10 +3,10 @@
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Extends the settings navigation inside Feedback activities.
+ * Adds the Dashboard item to Feedback activity navigation.
  *
- * @param settings_navigation $settingsnav Settings navigation instance.
- * @param context $context Current page context.
+ * @param settings_navigation $settingsnav
+ * @param context $context
  * @return void
  */
 function local_feedbackdashboard_extend_settings_navigation(
@@ -15,53 +15,48 @@ function local_feedbackdashboard_extend_settings_navigation(
 ): void {
     global $PAGE;
 
-    // The plugin item should only appear inside a course module.
+    // Execute only inside a course module.
     if ($context->contextlevel !== CONTEXT_MODULE) {
         return;
     }
 
-    // Confirm that the current page belongs to a course module.
-    if (empty($PAGE->cm)) {
+    // Confirm that the current module is a Feedback activity.
+    if (empty($PAGE->cm) || $PAGE->cm->modname !== 'feedback') {
         return;
     }
 
-    // Show the item only inside native Moodle Feedback activities.
-    if ($PAGE->cm->modname !== 'feedback') {
+    // Administrators are allowed automatically.
+    // Editing teachers receive this capability through db/access.php.
+    if (!has_capability('local/feedbackdashboard:view', $context)) {
         return;
     }
 
-    // Only users allowed to view Feedback reports can access the Dashboard.
-    if (!has_capability('mod/feedback:viewreports', $context)) {
-        return;
-    }
-
-    $dashboardurl = new moodle_url(
-        '/local/feedbackdashboard/index.php',
-        ['id' => $PAGE->cm->id]
-    );
-
-    /*
-     * The modulesettings node represents the activity's settings area.
-     * Depending on the theme and available screen width, Moodle may place
-     * this link directly in the secondary navigation or inside "More".
-     */
-    $modulesettings = $settingsnav->find(
+    // Main settings node of the current activity.
+    $feedbacknode = $settingsnav->find(
         'modulesettings',
         navigation_node::TYPE_SETTING
     );
 
-    if (!$modulesettings) {
+    if (!$feedbacknode) {
         return;
     }
 
-    $dashboardnode = $modulesettings->add(
+    $url = new moodle_url('/local/feedbackdashboard/index.php', [
+        'id' => $PAGE->cm->id,
+    ]);
+
+    $node = navigation_node::create(
         get_string('dashboard', 'local_feedbackdashboard'),
-        $dashboardurl,
-        navigation_node::TYPE_SETTING,
+        $url,
+        navigation_node::TYPE_CUSTOM,
         null,
-        'local_feedbackdashboard'
+        'feedbackdashboard'
     );
 
-    $dashboardnode->set_show_in_secondary_navigation(true);
+    /*
+     * Add Dashboard before the native Responses item.
+     * This increases the chance of it remaining visible in the bar
+     * instead of being moved into the "More" menu.
+     */
+    $feedbacknode->add_node($node, 'responses');
 }
-
