@@ -17,7 +17,7 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin->component = 'local_feedbackdashboard';
-$plugin->version   = 2026080500;
+$plugin->version   = 2026080501;
 $plugin->requires  = 2024100700;
 $plugin->maturity  = MATURITY_ALPHA;
-$plugin->release   = '1.0.0-alpha';
+$plugin->release   = '1.0.1-alpha';

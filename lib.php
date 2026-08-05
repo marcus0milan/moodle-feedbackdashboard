@@ -62,5 +62,6 @@ function local_feedbackdashboard_extend_settings_navigation(
         'local_feedbackdashboard'
     );
 
-    $dashboardnode->showinflatnavigation = true;
+    $dashboardnode->set_show_in_secondary_navigation(true);
 }
+
