@@ -40,6 +40,36 @@ function local_feedbackdashboard_clean_option_text(string $text): string {
 }
 
 /**
+ * Returns the primary colour configured in the current Moodle theme.
+ *
+ * @return string Valid hexadecimal colour.
+ */
+function local_feedbackdashboard_get_theme_primary_color(): string {
+    global $PAGE;
+
+    // Default Moodle/Boost primary colour.
+    $defaultcolor = '#0f6cbf';
+
+    /*
+     * Most Boost-based themes store their principal colour in the
+     * "brandcolor" setting.
+     */
+    $themecolor = $PAGE->theme->settings->brandcolor ?? null;
+
+    if (
+        is_string($themecolor) &&
+        preg_match(
+            '/^#[0-9a-fA-F]{6}$/',
+            trim($themecolor)
+        )
+    ) {
+        return trim($themecolor);
+    }
+
+    return $defaultcolor;
+}
+
+/**
  * Loads the values belonging to one question.
  *
  * When participants are selected, only identified responses belonging
@@ -355,6 +385,9 @@ $PAGE->set_title(
 $PAGE->set_heading(
     format_string($course->fullname)
 );
+
+$themeprimarycolor =
+    local_feedbackdashboard_get_theme_primary_color();
 
 /*
  * -------------------------------------------------------------------------
@@ -1054,13 +1087,16 @@ foreach ($items as $item) {
     ]);
 
     $series = new \core\chart_series(
-        'Quantidade de respostas',
-        $chartdata['counts']
+       'Quantidade de respostas',
+       $chartdata['counts']
     );
 
     $series->set_labels(
-        $chartdata['serieslabels']
-    );
+       $chartdata['serieslabels']
+   );
+
+   // Use the primary colour configured in the current Moodle theme.
+   $series->set_color($themeprimarycolor);
 
     $chart->add_series($series);
 
