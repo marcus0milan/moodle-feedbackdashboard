@@ -1,10 +1,5 @@
 <?php
 // This file is part of Moodle - https://moodle.org/
-//
-// Moodle is free software: you can redistribute it and/or modify
-// it under the terms of the GNU General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// any later version.
 
 /**
  * Main page for the Feedback Dashboard plugin.
@@ -18,345 +13,418 @@ require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/feedback/lib.php');
 
 /**
- * Converts an alternative stored by Feedback into plain text.
+ * Converts Feedback content to compact plain text.
  *
- * @param string $text Raw option text.
+ * @param string $text Raw text.
  * @return string
  */
-function local_feedbackdashboard_clean_option_text(string $text): string {
-    $formattedtext = format_text(
-        $text,
-        FORMAT_HTML,
-        [
-            'noclean' => false,
-            'para' => false,
-        ]
-    );
+function local_feedbackdashboard_clean_text(string $text): string {
+    $formatted = format_text($text, FORMAT_HTML, [
+        'noclean' => false,
+        'para' => false,
+    ]);
 
-    $plaintext = html_to_text($formattedtext, 0, false);
-    $plaintext = preg_replace('/\s+/u', ' ', $plaintext);
+    $plain = html_to_text($formatted, 0, false);
+    $plain = preg_replace('/\s+/u', ' ', $plain);
 
-    return trim((string) $plaintext);
+    return trim((string) $plain);
 }
 
 /**
- * Returns the primary colour configured in the current Moodle theme.
+ * Normalises a hexadecimal colour.
  *
- * @return string Valid hexadecimal colour.
+ * @param mixed $color Colour candidate.
+ * @param string $fallback Fallback colour.
+ * @return string
  */
-function local_feedbackdashboard_get_theme_primary_color(): string {
-    global $PAGE;
-
-    // Default Moodle/Boost primary colour.
-    $defaultcolor = '#0f6cbf';
-
-    /*
-     * Most Boost-based themes store their principal colour in the
-     * "brandcolor" setting.
-     */
-    $themecolor = $PAGE->theme->settings->brandcolor ?? null;
-
-    if (
-        is_string($themecolor) &&
-        preg_match(
-            '/^#[0-9a-fA-F]{6}$/',
-            trim($themecolor)
-        )
-    ) {
-        return trim($themecolor);
+function local_feedbackdashboard_normalise_hex($color, string $fallback = '#0F6CBF'): string {
+    if (!is_string($color)) {
+        return $fallback;
     }
 
-    return $defaultcolor;
+    $color = trim($color);
+
+    if (preg_match('/^#[0-9a-fA-F]{6}$/', $color)) {
+        return strtoupper($color);
+    }
+
+    if (preg_match('/^#[0-9a-fA-F]{3}$/', $color)) {
+        return strtoupper(sprintf(
+            '#%s%s%s%s%s%s',
+            $color[1], $color[1],
+            $color[2], $color[2],
+            $color[3], $color[3]
+        ));
+    }
+
+    return $fallback;
 }
 
 /**
- * Loads the values belonging to one question.
+ * Converts a hexadecimal colour to RGB.
  *
- * When participants are selected, only identified responses belonging
- * to those participants are returned.
- *
- * @param stdClass $item Feedback question.
- * @param int $feedbackid Feedback instance ID.
- * @param array $selecteduserids Selected user IDs.
- * @param bool $isanonymous Whether the Feedback is anonymous.
+ * @param string $hex Hexadecimal colour.
  * @return array
  */
-function local_feedbackdashboard_get_question_values(
-    stdClass $item,
-    int $feedbackid,
-    array $selecteduserids,
-    bool $isanonymous
-): array {
-    global $DB;
+function local_feedbackdashboard_hex_to_rgb(string $hex): array {
+    $hex = ltrim(local_feedbackdashboard_normalise_hex($hex), '#');
 
-    $params = [
-        'itemid' => $item->id,
-        'feedbackid' => $feedbackid,
+    return [
+        hexdec(substr($hex, 0, 2)),
+        hexdec(substr($hex, 2, 2)),
+        hexdec(substr($hex, 4, 2)),
     ];
-
-    $sql = "
-        SELECT
-            fv.id,
-            fv.value,
-            fbc.userid,
-            fbc.id AS completedid
-        FROM {feedback_value} fv
-        JOIN {feedback_completed} fbc
-            ON fbc.id = fv.completed
-        WHERE fv.item = :itemid
-          AND fbc.feedback = :feedbackid
-    ";
-
-    /*
-     * Never associate an anonymous response with a participant.
-     *
-     * The user filter is applied only to identified responses.
-     */
-    if (!$isanonymous && !empty($selecteduserids)) {
-        [$usersql, $userparams] = $DB->get_in_or_equal(
-            $selecteduserids,
-            SQL_PARAMS_NAMED,
-            'selecteduser'
-        );
-
-        $sql .= "
-            AND fbc.userid {$usersql}
-            AND fbc.anonymous_response = :identifiedresponse
-        ";
-
-        $params += $userparams;
-        $params['identifiedresponse'] = FEEDBACK_ANONYMOUS_NO;
-    }
-
-    $sql .= ' ORDER BY fbc.timemodified, fv.id';
-
-    return $DB->get_records_sql($sql, $params);
 }
 
 /**
- * Creates chart data for a multiple-choice question.
+ * Mixes two hexadecimal colours.
  *
- * Supports:
- * - multichoice;
- * - multichoicerated.
+ * @param string $base Base colour.
+ * @param string $target Target colour.
+ * @param float $weight Target colour weight from 0 to 1.
+ * @return string
+ */
+function local_feedbackdashboard_mix_color(string $base, string $target, float $weight): string {
+    $weight = max(0.0, min(1.0, $weight));
+    [$br, $bg, $bb] = local_feedbackdashboard_hex_to_rgb($base);
+    [$tr, $tg, $tb] = local_feedbackdashboard_hex_to_rgb($target);
+
+    $r = (int) round($br * (1 - $weight) + $tr * $weight);
+    $g = (int) round($bg * (1 - $weight) + $tg * $weight);
+    $b = (int) round($bb * (1 - $weight) + $tb * $weight);
+
+    return sprintf('#%02X%02X%02X', $r, $g, $b);
+}
+
+/**
+ * Returns the main colour configured by the current Moodle theme.
  *
- * @param stdClass $item Feedback question.
- * @param array $values Question response records.
+ * @return string
+ */
+function local_feedbackdashboard_get_theme_primary_color(): string {
+    global $CFG, $PAGE;
+
+    $candidates = [];
+
+    if (!empty($PAGE->theme->settings->brandcolor)) {
+        $candidates[] = $PAGE->theme->settings->brandcolor;
+    }
+
+    $themename = $PAGE->theme->name ?? ($CFG->theme ?? '');
+
+    if ($themename !== '') {
+        $themeconfig = get_config('theme_' . $themename);
+
+        if (is_object($themeconfig)) {
+            foreach (['brandcolor', 'primarycolor', 'primarycolour', 'maincolor', 'themecolor'] as $setting) {
+                if (!empty($themeconfig->{$setting})) {
+                    $candidates[] = $themeconfig->{$setting};
+                }
+            }
+        }
+    }
+
+    foreach ($candidates as $candidate) {
+        $normalised = local_feedbackdashboard_normalise_hex($candidate, '');
+        if ($normalised !== '') {
+            return $normalised;
+        }
+    }
+
+    return '#0F6CBF';
+}
+
+/**
+ * Attempts to extract a NPS score from a choice label.
+ *
+ * @param string $label Choice label.
+ * @return int|null
+ */
+function local_feedbackdashboard_extract_score_from_label(string $label): ?int {
+    $label = local_feedbackdashboard_clean_text($label);
+
+    if (preg_match('/^\s*\(?\s*(10|[0-9])\s*\)?\s*$/u', $label, $matches)) {
+        return (int) $matches[1];
+    }
+
+    if (preg_match('/^\s*\(?\s*(10|[0-9])\s*\)?\s*(?:[-–—:]|\s)/u', $label, $matches)) {
+        return (int) $matches[1];
+    }
+
+    return null;
+}
+
+/**
+ * Returns the options and NPS weights for a choice question.
+ *
+ * The stored feedback_value is the 1-based option index. For rated
+ * multiple-choice questions, the score is the configured weight.
+ * For normal multiple-choice questions, numeric labels such as 0..10
+ * are accepted as scores.
+ *
+ * @param stdClass $item Feedback item.
  * @return array|null
  */
-function local_feedbackdashboard_build_choice_chart_data(
-    stdClass $item,
-    array $values
-): ?array {
+function local_feedbackdashboard_get_choice_config(stdClass $item): ?array {
     if (!in_array($item->typ, ['multichoice', 'multichoicerated'], true)) {
         return null;
     }
 
     $itemobject = feedback_get_item_class($item->typ);
-
     if (!$itemobject) {
         return null;
     }
 
     $info = $itemobject->get_info($item);
-
     $labels = [];
-    $counts = [];
-    $ismultiplecheckbox = false;
+    $scores = [];
+    $ismultiple = false;
 
-    /*
-     * Normal multiple-choice question.
-     */
     if ($item->typ === 'multichoice') {
-        $rawoptions = explode(
-            FEEDBACK_MULTICHOICE_LINE_SEP,
-            $info->presentation
-        );
-
-        $ismultiplecheckbox = ($info->subtype === 'c');
+        $rawoptions = explode(FEEDBACK_MULTICHOICE_LINE_SEP, $info->presentation);
+        $ismultiple = ($info->subtype === 'c');
 
         foreach ($rawoptions as $index => $rawoption) {
-            $optionnumber = $index + 1;
-            $optiontext = local_feedbackdashboard_clean_option_text(
-                $rawoption
-            );
+            $optionindex = $index + 1;
+            $label = local_feedbackdashboard_clean_text((string) $rawoption);
 
-            if ($optiontext === '') {
-                $optiontext = 'Alternativa ' . $optionnumber;
+            if ($label === '') {
+                $label = 'Alternativa ' . $optionindex;
             }
 
-            $labels[$optionnumber] = $optiontext;
-            $counts[$optionnumber] = 0;
+            $labels[$optionindex] = $label;
+            $scores[$optionindex] = local_feedbackdashboard_extract_score_from_label($label);
         }
-    }
-
-    /*
-     * Rated multiple-choice question.
-     *
-     * Moodle stores each option approximately as:
-     *
-     * weight####option text
-     */
-    if ($item->typ === 'multichoicerated') {
-        $rawoptions = explode(
-            FEEDBACK_MULTICHOICERATED_LINE_SEP,
-            $info->presentation
-        );
+    } else {
+        $rawoptions = explode(FEEDBACK_MULTICHOICERATED_LINE_SEP, $info->presentation);
 
         foreach ($rawoptions as $index => $rawoption) {
-            $optionnumber = $index + 1;
-
-            $parts = explode(
-                FEEDBACK_MULTICHOICERATED_VALUE_SEP,
-                $rawoption,
-                2
-            );
-
+            $optionindex = $index + 1;
+            $parts = explode(FEEDBACK_MULTICHOICERATED_VALUE_SEP, $rawoption, 2);
             $weight = trim((string) ($parts[0] ?? ''));
             $rawtext = (string) ($parts[1] ?? $parts[0] ?? '');
+            $label = local_feedbackdashboard_clean_text($rawtext);
 
-            $optiontext = local_feedbackdashboard_clean_option_text(
-                $rawtext
-            );
-
-            if ($optiontext === '') {
-                $optiontext = 'Alternativa ' . $optionnumber;
+            if ($label === '') {
+                $label = 'Alternativa ' . $optionindex;
             }
 
-            /*
-             * Avoid displaying duplicated labels such as "(1) 1".
-             */
-            if (
-                $weight !== '' &&
-                trim($optiontext) !== $weight
-            ) {
-                $optiontext = '(' . $weight . ') ' . $optiontext;
-            }
+            $labels[$optionindex] = $label;
 
-            $labels[$optionnumber] = $optiontext;
-            $counts[$optionnumber] = 0;
-        }
-    }
-
-    if (empty($labels)) {
-        return null;
-    }
-
-    $responseswithvalue = 0;
-
-    foreach ($values as $valuerecord) {
-        $storedvalue = trim((string) $valuerecord->value);
-
-        if ($storedvalue === '' || $storedvalue === '0') {
-            continue;
-        }
-
-        $responseswithvalue++;
-
-        /*
-         * Checkbox questions can contain multiple indexes separated by |.
-         * Radio and select questions contain only one index.
-         */
-        if ($ismultiplecheckbox) {
-            $selectedoptions = explode(
-                FEEDBACK_MULTICHOICE_LINE_SEP,
-                $storedvalue
-            );
-        } else {
-            $selectedoptions = [$storedvalue];
-        }
-
-        foreach ($selectedoptions as $selectedoption) {
-            $selectedindex = (int) trim((string) $selectedoption);
-
-            if (array_key_exists($selectedindex, $counts)) {
-                $counts[$selectedindex]++;
+            if (is_numeric(str_replace(',', '.', $weight))) {
+                $numericweight = (float) str_replace(',', '.', $weight);
+                $rounded = (int) round($numericweight);
+                $scores[$optionindex] = abs($numericweight - $rounded) < 0.00001 ? $rounded : null;
+            } else {
+                $scores[$optionindex] = local_feedbackdashboard_extract_score_from_label($label);
             }
         }
-    }
-
-    $serieslabels = [];
-    $percentages = [];
-
-    foreach ($counts as $optionnumber => $count) {
-        $percentage = 0.0;
-
-        if ($responseswithvalue > 0) {
-            $percentage = ($count / $responseswithvalue) * 100;
-        }
-
-        $percentages[$optionnumber] = $percentage;
-
-        $serieslabels[] = sprintf(
-            '%d (%s%%)',
-            $count,
-            format_float($percentage, 1)
-        );
     }
 
     return [
-        'labels' => array_values($labels),
-        'counts' => array_values($counts),
-        'serieslabels' => $serieslabels,
-        'percentages' => array_values($percentages),
-        'responseswithvalue' => $responseswithvalue,
-        'ismultiplecheckbox' => $ismultiplecheckbox,
+        'labels' => $labels,
+        'scores' => $scores,
+        'ismultiple' => $ismultiple,
     ];
+}
+
+/**
+ * Determines whether a Feedback item represents a standard 0-to-10 NPS question.
+ *
+ * @param stdClass $item Feedback item.
+ * @return bool
+ */
+function local_feedbackdashboard_is_nps_item(stdClass $item): bool {
+    $config = local_feedbackdashboard_get_choice_config($item);
+
+    if ($config === null || $config['ismultiple']) {
+        return false;
+    }
+
+    $scores = array_values(array_filter(
+        $config['scores'],
+        static fn($value) => $value !== null
+    ));
+
+    $scores = array_values(array_unique(array_map('intval', $scores)));
+    sort($scores);
+
+    if (count($scores) < 9) {
+        return false;
+    }
+
+    if (!in_array(0, $scores, true) || !in_array(10, $scores, true)) {
+        return false;
+    }
+
+    foreach ($scores as $score) {
+        if ($score < 0 || $score > 10) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+/**
+ * Finds the first 0-to-10 NPS question in the Feedback.
+ *
+ * @param array $items Feedback items.
+ * @return stdClass|null
+ */
+function local_feedbackdashboard_find_nps_item(array $items): ?stdClass {
+    foreach ($items as $item) {
+        if (local_feedbackdashboard_is_nps_item($item)) {
+            return $item;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Returns the NPS score represented by a stored response value.
+ *
+ * @param stdClass $item NPS item.
+ * @param string $storedvalue Stored feedback_value value.
+ * @return int|null
+ */
+function local_feedbackdashboard_decode_nps_score(stdClass $item, string $storedvalue): ?int {
+    $storedvalue = trim($storedvalue);
+
+    if ($storedvalue === '' || $storedvalue === '0') {
+        return null;
+    }
+
+    $config = local_feedbackdashboard_get_choice_config($item);
+    if ($config === null || $config['ismultiple']) {
+        return null;
+    }
+
+    $optionindex = (int) $storedvalue;
+    $score = $config['scores'][$optionindex] ?? null;
+
+    if ($score === null || $score < 0 || $score > 10) {
+        return null;
+    }
+
+    return (int) $score;
+}
+
+/**
+ * Calculates NPS metrics for the selected set of completions.
+ *
+ * @param stdClass $npsitem NPS question.
+ * @param array $completions Completion records.
+ * @param array $valuesbycompletion Values indexed by completion ID and item ID.
+ * @return array
+ */
+function local_feedbackdashboard_calculate_nps(
+    stdClass $npsitem,
+    array $completions,
+    array $valuesbycompletion
+): array {
+    $scores = [];
+    $scorecounts = array_fill(0, 11, 0);
+
+    foreach ($completions as $completion) {
+        $rawvalue = (string) ($valuesbycompletion[$completion->id][$npsitem->id] ?? '');
+        $score = local_feedbackdashboard_decode_nps_score($npsitem, $rawvalue);
+
+        if ($score === null) {
+            continue;
+        }
+
+        $scores[(int) $completion->id] = $score;
+        $scorecounts[$score]++;
+    }
+
+    $total = count($scores);
+    $promoters = 0;
+    $neutrals = 0;
+    $detractors = 0;
+
+    foreach ($scores as $score) {
+        if ($score >= 9) {
+            $promoters++;
+        } else if ($score >= 7) {
+            $neutrals++;
+        } else {
+            $detractors++;
+        }
+    }
+
+    $nps = $total > 0 ? (($promoters - $detractors) / $total) * 100 : 0.0;
+    $average = $total > 0 ? array_sum($scores) / $total : 0.0;
+
+    return [
+        'scores' => $scores,
+        'scorecounts' => $scorecounts,
+        'total' => $total,
+        'promoters' => $promoters,
+        'neutrals' => $neutrals,
+        'detractors' => $detractors,
+        'promoterspct' => $total > 0 ? ($promoters / $total) * 100 : 0.0,
+        'neutralspct' => $total > 0 ? ($neutrals / $total) * 100 : 0.0,
+        'detractorspct' => $total > 0 ? ($detractors / $total) * 100 : 0.0,
+        'nps' => $nps,
+        'average' => $average,
+    ];
+}
+
+/**
+ * Returns all open-text answers from one completion as a readable HTML fragment.
+ *
+ * @param int $completionid Completion ID.
+ * @param array $textitems Text items.
+ * @param array $valuesbycompletion Values indexed by completion and item.
+ * @return string
+ */
+function local_feedbackdashboard_build_open_answers_html(
+    int $completionid,
+    array $textitems,
+    array $valuesbycompletion
+): string {
+    $answers = [];
+
+    foreach ($textitems as $item) {
+        $rawvalue = (string) ($valuesbycompletion[$completionid][$item->id] ?? '');
+        $answer = local_feedbackdashboard_clean_text($rawvalue);
+
+        if ($answer === '') {
+            continue;
+        }
+
+        if (count($textitems) === 1) {
+            $answers[] = s($answer);
+        } else {
+            $answers[] = html_writer::tag('strong', s(format_string($item->name)))
+                . ': ' . s($answer);
+        }
+    }
+
+    return empty($answers) ? '—' : implode(html_writer::empty_tag('br'), $answers);
 }
 
 /*
  * -------------------------------------------------------------------------
- * Page parameters and permissions.
+ * Parameters, permissions and core records.
  * -------------------------------------------------------------------------
  */
 
 $id = required_param('id', PARAM_INT);
+$selecteduserids = optional_param_array('users', [], PARAM_INT);
+$selecteduserids = array_values(array_unique(array_map('intval', $selecteduserids)));
 
-$selecteduserids = optional_param_array(
-    'users',
-    [],
-    PARAM_INT
-);
-
-$selecteduserids = array_values(
-    array_unique(
-        array_map('intval', $selecteduserids)
-    )
-);
-
-[$course, $cm] = get_course_and_cm_from_cmid(
-    $id,
-    'feedback'
-);
-
+[$course, $cm] = get_course_and_cm_from_cmid($id, 'feedback');
 require_course_login($course, true, $cm);
 
 $context = context_module::instance($cm->id);
+require_capability('local/feedbackdashboard:view', $context);
+require_capability('mod/feedback:viewreports', $context);
 
-/*
- * The user must have permission for the plugin and for the native
- * Feedback reports.
- */
-require_capability(
-    'local/feedbackdashboard:view',
-    $context
-);
-
-require_capability(
-    'mod/feedback:viewreports',
-    $context
-);
-
-$feedback = $DB->get_record(
-    'feedback',
-    ['id' => $cm->instance],
-    '*',
-    MUST_EXIST
-);
-
-$isanonymous = (
-    (int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES
-);
+$feedback = $DB->get_record('feedback', ['id' => $cm->instance], '*', MUST_EXIST);
+$isanonymous = ((int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES);
 
 /*
  * -------------------------------------------------------------------------
@@ -364,34 +432,29 @@ $isanonymous = (
  * -------------------------------------------------------------------------
  */
 
-$pageurl = new moodle_url(
-    '/local/feedbackdashboard/index.php',
-    ['id' => $cm->id]
-);
+$pageurl = new moodle_url('/local/feedbackdashboard/index.php', ['id' => $cm->id]);
 
 $PAGE->set_url($pageurl);
 $PAGE->set_course($course);
 $PAGE->set_cm($cm, $course);
 $PAGE->set_context($context);
 $PAGE->set_pagelayout('incourse');
+$PAGE->set_title('Dashboard de NPS: ' . format_string($feedback->name));
+$PAGE->set_heading(format_string($course->fullname));
 
-$PAGE->set_title(
-    get_string(
-        'dashboardtitle',
-        'local_feedbackdashboard'
-    ) . ': ' . format_string($feedback->name)
-);
+$primary = local_feedbackdashboard_get_theme_primary_color();
+$dark = local_feedbackdashboard_mix_color($primary, '#000000', 0.48);
+$light = local_feedbackdashboard_mix_color($primary, '#FFFFFF', 0.95);
+$border = local_feedbackdashboard_mix_color($primary, '#FFFFFF', 0.78);
 
-$PAGE->set_heading(
-    format_string($course->fullname)
-);
-
-$themeprimarycolor =
-    local_feedbackdashboard_get_theme_primary_color();
+// Semantic NPS colours intentionally remain stable regardless of the theme.
+$goodcolor = '#2A9D8F';
+$neutralcolor = '#E9C46A';
+$badcolor = '#E76F51';
 
 /*
  * -------------------------------------------------------------------------
- * Load questions.
+ * Feedback questions and responder filter.
  * -------------------------------------------------------------------------
  */
 
@@ -405,108 +468,127 @@ $items = $DB->get_records_select(
     'position ASC'
 );
 
-$questionscount = count($items);
+$textitems = array_values(array_filter(
+    $items,
+    static fn($item) => in_array($item->typ, ['textarea', 'textfield'], true)
+));
 
-/*
- * -------------------------------------------------------------------------
- * Load identified participants who submitted the Feedback.
- * -------------------------------------------------------------------------
- */
-
+$npsitem = local_feedbackdashboard_find_nps_item($items);
 $responders = [];
 
 if (!$isanonymous) {
-    $responderssql = "
-        SELECT DISTINCT
-            u.id,
-            u.firstname,
-            u.lastname,
-            u.firstnamephonetic,
-            u.lastnamephonetic,
-            u.middlename,
-            u.alternatename,
-            u.email
-        FROM {feedback_completed} fbc
-        JOIN {user} u
-            ON u.id = fbc.userid
-        WHERE fbc.feedback = :feedbackid
-          AND fbc.userid > 0
-          AND fbc.anonymous_response = :identifiedresponse
-          AND u.deleted = 0
-        ORDER BY u.firstname, u.lastname, u.id
-    ";
-
     $responders = $DB->get_records_sql(
-        $responderssql,
+        "SELECT DISTINCT
+                u.id,
+                u.firstname,
+                u.lastname,
+                u.firstnamephonetic,
+                u.lastnamephonetic,
+                u.middlename,
+                u.alternatename,
+                u.email
+           FROM {feedback_completed} fbc
+           JOIN {user} u ON u.id = fbc.userid
+          WHERE fbc.feedback = :feedbackid
+            AND fbc.userid > 0
+            AND fbc.anonymous_response = :identifiedresponse
+            AND u.deleted = 0
+       ORDER BY u.firstname, u.lastname, u.id",
         [
             'feedbackid' => $feedback->id,
             'identifiedresponse' => FEEDBACK_ANONYMOUS_NO,
         ]
     );
 
-    /*
-     * Do not accept IDs manually inserted into the URL.
-     * Only actual Feedback responders are accepted.
-     */
-    $validresponderids = array_map(
-        'intval',
-        array_keys($responders)
-    );
-
-    $selecteduserids = array_values(
-        array_intersect(
-            $selecteduserids,
-            $validresponderids
-        )
-    );
+    $validresponderids = array_map('intval', array_keys($responders));
+    $selecteduserids = array_values(array_intersect($selecteduserids, $validresponderids));
 } else {
-    /*
-     * An anonymous Feedback can never use the participant filter.
-     */
     $selecteduserids = [];
 }
 
 /*
  * -------------------------------------------------------------------------
- * Response counters.
+ * Load the completions represented by the current filter.
  * -------------------------------------------------------------------------
  */
 
-$totalresponsecount = $DB->count_records(
-    'feedback_completed',
-    ['feedback' => $feedback->id]
-);
+$completionparams = [
+    'feedbackid' => $feedback->id,
+    'responsemode' => $isanonymous ? FEEDBACK_ANONYMOUS_YES : FEEDBACK_ANONYMOUS_NO,
+];
 
-$filteredresponsecount = $totalresponsecount;
+$completionssql = "
+    SELECT
+        fbc.id,
+        fbc.userid,
+        fbc.timemodified,
+        u.firstname,
+        u.lastname,
+        u.firstnamephonetic,
+        u.lastnamephonetic,
+        u.middlename,
+        u.alternatename,
+        u.email
+    FROM {feedback_completed} fbc
+    LEFT JOIN {user} u ON u.id = fbc.userid
+    WHERE fbc.feedback = :feedbackid
+      AND fbc.anonymous_response = :responsemode
+";
 
 if (!$isanonymous && !empty($selecteduserids)) {
     [$usersql, $userparams] = $DB->get_in_or_equal(
         $selecteduserids,
         SQL_PARAMS_NAMED,
-        'countuser'
+        'dashboarduser'
     );
 
-    $countparams = [
-        'feedbackid' => $feedback->id,
-        'identifiedresponse' => FEEDBACK_ANONYMOUS_NO,
-    ];
-
-    $countparams += $userparams;
-
-    $filteredresponsecount = $DB->count_records_select(
-        'feedback_completed',
-        "
-            feedback = :feedbackid
-            AND userid {$usersql}
-            AND anonymous_response = :identifiedresponse
-        ",
-        $countparams
-    );
+    $completionssql .= " AND fbc.userid {$usersql}";
+    $completionparams += $userparams;
 }
+
+$completionssql .= ' ORDER BY fbc.timemodified ASC, fbc.id ASC';
+$completions = $DB->get_records_sql($completionssql, $completionparams);
+
+$totalresponsecount = $DB->count_records('feedback_completed', [
+    'feedback' => $feedback->id,
+    'anonymous_response' => $isanonymous ? FEEDBACK_ANONYMOUS_YES : FEEDBACK_ANONYMOUS_NO,
+]);
+
+$valuesbycompletion = [];
+
+if (!empty($completions) && !empty($items)) {
+    [$completionsinsql, $completioninparams] = $DB->get_in_or_equal(
+        array_keys($completions),
+        SQL_PARAMS_NAMED,
+        'dashboardcompletion'
+    );
+    [$itemsinsql, $iteminparams] = $DB->get_in_or_equal(
+        array_keys($items),
+        SQL_PARAMS_NAMED,
+        'dashboarditem'
+    );
+
+    $valuerecords = $DB->get_records_sql(
+        "SELECT id, completed, item, value
+           FROM {feedback_value}
+          WHERE completed {$completionsinsql}
+            AND item {$itemsinsql}",
+        $completioninparams + $iteminparams
+    );
+
+    foreach ($valuerecords as $valuerecord) {
+        $valuesbycompletion[(int) $valuerecord->completed][(int) $valuerecord->item] =
+            (string) $valuerecord->value;
+    }
+}
+
+$npsmetrics = $npsitem !== null
+    ? local_feedbackdashboard_calculate_nps($npsitem, $completions, $valuesbycompletion)
+    : null;
 
 /*
  * -------------------------------------------------------------------------
- * Automatic participant filter.
+ * Filter JavaScript.
  * -------------------------------------------------------------------------
  */
 
@@ -514,97 +596,60 @@ $filterjavascript = <<<'JS'
 (function() {
     'use strict';
 
-    const form = document.getElementById(
-        'feedbackdashboard-filter-form'
-    );
-
+    const form = document.getElementById('feedbackdashboard-filter-form');
     if (!form) {
         return;
     }
 
-    const allCheckbox = document.getElementById(
-        'feedbackdashboard-filter-all'
-    );
-
+    const allCheckbox = document.getElementById('feedbackdashboard-filter-all');
     const userCheckboxes = Array.from(
-        form.querySelectorAll(
-            '.feedbackdashboard-user-checkbox'
-        )
+        form.querySelectorAll('.feedbackdashboard-user-checkbox')
     );
-
-    const searchInput = document.getElementById(
-        'feedbackdashboard-student-search'
-    );
-
+    const searchInput = document.getElementById('feedbackdashboard-student-search');
     const studentOptions = Array.from(
-        form.querySelectorAll(
-            '.feedbackdashboard-student-option'
-        )
+        form.querySelectorAll('.feedbackdashboard-student-option')
     );
 
     let submitTimer = null;
 
-    const scheduleSubmit = () => {
+    const scheduleSubmit = function() {
         window.clearTimeout(submitTimer);
-
-        /*
-         * The delay allows the teacher to select two or more students
-         * before the page reloads.
-         */
-        submitTimer = window.setTimeout(() => {
+        submitTimer = window.setTimeout(function() {
             form.submit();
-        }, 900);
+        }, 700);
     };
 
     if (allCheckbox) {
-        allCheckbox.addEventListener('change', () => {
+        allCheckbox.addEventListener('change', function() {
             if (allCheckbox.checked) {
-                userCheckboxes.forEach((checkbox) => {
+                userCheckboxes.forEach(function(checkbox) {
                     checkbox.checked = false;
                 });
-            } else {
-                const hasSelectedUser = userCheckboxes.some(
-                    (checkbox) => checkbox.checked
-                );
-
-                if (!hasSelectedUser) {
-                    allCheckbox.checked = true;
-                }
+            } else if (!userCheckboxes.some(function(checkbox) { return checkbox.checked; })) {
+                allCheckbox.checked = true;
             }
-
             scheduleSubmit();
         });
     }
 
-    userCheckboxes.forEach((checkbox) => {
-        checkbox.addEventListener('change', () => {
-            const hasSelectedUser = userCheckboxes.some(
-                (currentCheckbox) => currentCheckbox.checked
-            );
-
+    userCheckboxes.forEach(function(checkbox) {
+        checkbox.addEventListener('change', function() {
             if (allCheckbox) {
-                allCheckbox.checked = !hasSelectedUser;
+                allCheckbox.checked = !userCheckboxes.some(function(current) {
+                    return current.checked;
+                });
             }
-
             scheduleSubmit();
         });
     });
 
     if (searchInput) {
-        searchInput.addEventListener('input', () => {
-            const searchText = searchInput.value
-                .trim()
-                .toLocaleLowerCase();
+        searchInput.addEventListener('input', function() {
+            const term = searchInput.value.trim().toLocaleLowerCase();
 
-            studentOptions.forEach((option) => {
-                const studentName = (
-                    option.dataset.studentName || ''
-                ).toLocaleLowerCase();
-
-                option.hidden = (
-                    searchText !== '' &&
-                    !studentName.includes(searchText)
-                );
+            studentOptions.forEach(function(option) {
+                const name = (option.dataset.studentName || '').toLocaleLowerCase();
+                option.hidden = term !== '' && !name.includes(term);
             });
         });
     }
@@ -615,227 +660,97 @@ $PAGE->requires->js_init_code($filterjavascript);
 
 /*
  * -------------------------------------------------------------------------
- * Page output.
+ * Output.
  * -------------------------------------------------------------------------
  */
 
 echo $OUTPUT->header();
 
-/*
- * Header and PDF button.
- */
-echo html_writer::start_div(
-    'd-flex justify-content-between align-items-center '
-    . 'flex-wrap gap-3 mb-3'
-);
+// Lightweight dashboard styling. Theme colours are injected from Moodle configuration.
+$dashboardcss = '
+.feedbackdashboard-report {background:' . $light . '; border-top:5px solid ' . $primary . '; padding:1.5rem; border-radius:.35rem;}
+.feedbackdashboard-meta {background:#fff; border:1px solid ' . $border . '; padding:.75rem 1rem; margin-bottom:1rem;}
+.feedbackdashboard-card {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; height:100%; position:relative; overflow:hidden;}
+.feedbackdashboard-card::before {content:""; display:block; height:4px; background:var(--card-accent,' . $primary . ');}
+.feedbackdashboard-card-body {padding:.65rem .75rem .8rem; text-align:center;}
+.feedbackdashboard-card-title {font-weight:600; color:#536271; font-size:.88rem;}
+.feedbackdashboard-card-value {font-size:1.9rem; line-height:1.15; font-weight:700; color:' . $dark . '; margin:.2rem 0;}
+.feedbackdashboard-card-detail {color:#637083; font-size:.78rem;}
+.feedbackdashboard-chartbox {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; padding:1rem; height:100%;}
+.feedbackdashboard-nps-row {display:grid; grid-template-columns:90px 1fr 92px; align-items:center; gap:.65rem; margin:.8rem 0;}
+.feedbackdashboard-nps-label {font-size:.82rem; font-weight:600; color:#536271;}
+.feedbackdashboard-nps-track {height:24px; background:#eef2f6; border-radius:3px; overflow:hidden;}
+.feedbackdashboard-nps-fill {height:100%; min-width:0; border-radius:3px;}
+.feedbackdashboard-nps-value {font-size:.8rem; font-weight:600; color:' . $dark . '; text-align:right;}
+@media (max-width: 767.98px) {.feedbackdashboard-nps-row {grid-template-columns:80px 1fr;}.feedbackdashboard-nps-value {grid-column:2; text-align:left; margin-top:-.4rem;}}
+';
 
+echo html_writer::tag('style', $dashboardcss);
+
+/* Header and PDF button. */
+echo html_writer::start_div('d-flex justify-content-between align-items-center flex-wrap gap-3 mb-3');
 echo html_writer::start_div();
-
-echo $OUTPUT->heading(
-    get_string(
-        'dashboardtitle',
-        'local_feedbackdashboard'
-    ),
-    2
-);
-
-echo $OUTPUT->heading(
-    format_string($feedback->name),
-    3
-);
-
+echo $OUTPUT->heading('Dashboard de NPS', 2);
+echo html_writer::tag('div', 'Feedback de Pesquisa de Satisfação do aluno', ['class' => 'text-muted']);
 echo html_writer::end_div();
 
-/*
- * PDF download URL.
- *
- * The currently selected participants are sent to download.php,
- * ensuring that the PDF uses exactly the same Dashboard filter.
- */
-$pdfparams = [
-    'id' => $cm->id,
-];
-
+$pdfparams = ['id' => $cm->id];
 if (!$isanonymous && !empty($selecteduserids)) {
     $pdfparams['userids'] = implode(',', $selecteduserids);
 }
 
-$pdfurl = new moodle_url(
-    '/local/feedbackdashboard/download.php',
-    $pdfparams
-);
+$pdfurl = new moodle_url('/local/feedbackdashboard/download.php', $pdfparams);
+$pdfbuttoncontent = $OUTPUT->pix_icon('t/download', '') . ' Baixar relatório em PDF';
 
-$pdfbuttoncontent = $OUTPUT->pix_icon(
-    't/download',
-    ''
-) . ' Baixar relatório em PDF';
-
-echo html_writer::link(
-    $pdfurl,
-    $pdfbuttoncontent,
-    [
-        'class' => 'btn btn-outline-primary',
-        'title' => 'Baixar relatório em PDF',
-    ]
-);
-
+echo html_writer::link($pdfurl, $pdfbuttoncontent, [
+    'class' => 'btn btn-outline-primary',
+    'title' => 'Baixar o relatório NPS com o filtro atual',
+]);
 echo html_writer::end_div();
 
-/*
- * Feedback privacy status.
- */
-if ($isanonymous) {
-    echo $OUTPUT->notification(
-        'Esta pesquisa é anônima. Os resultados são apresentados '
-        . 'de forma geral e não podem ser filtrados pelo nome dos alunos.',
-        'warning'
-    );
-} else {
-    echo $OUTPUT->notification(
-        'Pesquisa identificada. Utilize o filtro para visualizar todos '
-        . 'os alunos ou participantes específicos.',
-        'info'
-    );
-}
-
-/*
- * Summary cards.
- */
-echo html_writer::start_div('row g-3 mb-4');
-
-echo html_writer::start_div('col-12 col-md-4');
-echo html_writer::start_div('card h-100');
-echo html_writer::start_div('card-body');
-echo html_writer::tag(
-    'div',
-    'Respostas totais',
-    ['class' => 'text-muted mb-1']
-);
-echo html_writer::tag(
-    'div',
-    (string) $totalresponsecount,
-    ['class' => 'h3 mb-0']
-);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-
-echo html_writer::start_div('col-12 col-md-4');
-echo html_writer::start_div('card h-100');
-echo html_writer::start_div('card-body');
-echo html_writer::tag(
-    'div',
-    'Respostas consideradas',
-    ['class' => 'text-muted mb-1']
-);
-echo html_writer::tag(
-    'div',
-    (string) $filteredresponsecount,
-    ['class' => 'h3 mb-0']
-);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-
-echo html_writer::start_div('col-12 col-md-4');
-echo html_writer::start_div('card h-100');
-echo html_writer::start_div('card-body');
-echo html_writer::tag(
-    'div',
-    'Questões',
-    ['class' => 'text-muted mb-1']
-);
-echo html_writer::tag(
-    'div',
-    (string) $questionscount,
-    ['class' => 'h3 mb-0']
-);
-echo html_writer::end_div();
-echo html_writer::end_div();
-echo html_writer::end_div();
-
-echo html_writer::end_div();
-
-/*
- * Participant filter.
- */
+/* Participant filter. */
 if (!$isanonymous) {
     echo html_writer::start_div('card mb-4');
     echo html_writer::start_div('card-body');
-
-    echo $OUTPUT->heading(
-        'Filtrar participantes',
-        3,
-        'h4 card-title'
-    );
-
+    echo $OUTPUT->heading('Filtrar participantes', 3, 'h5 card-title');
     echo html_writer::tag(
         'p',
-        'Selecione um ou mais alunos. Os gráficos serão recalculados '
-        . 'automaticamente de acordo com a seleção.',
-        ['class' => 'text-muted']
+        'Selecione um ou mais alunos. Os indicadores, gráficos, tabela e PDF serão recalculados com o mesmo filtro.',
+        ['class' => 'text-muted mb-3']
     );
 
     if (empty($responders)) {
-        echo $OUTPUT->notification(
-            'Ainda não há alunos identificados que responderam '
-            . 'esta pesquisa.',
-            'info'
-        );
+        echo $OUTPUT->notification('Ainda não há alunos identificados que responderam esta pesquisa.', 'info');
     } else {
-        $formaction = new moodle_url(
-            '/local/feedbackdashboard/index.php'
-        );
+        echo html_writer::start_tag('form', [
+            'id' => 'feedbackdashboard-filter-form',
+            'method' => 'get',
+            'action' => (new moodle_url('/local/feedbackdashboard/index.php'))->out(false),
+            'autocomplete' => 'off',
+        ]);
+        echo html_writer::empty_tag('input', [
+            'type' => 'hidden',
+            'name' => 'id',
+            'value' => $cm->id,
+        ]);
 
-        echo html_writer::start_tag(
-            'form',
-            [
-                'id' => 'feedbackdashboard-filter-form',
-                'method' => 'get',
-                'action' => $formaction->out(false),
-                'autocomplete' => 'off',
-            ]
-        );
-
-        echo html_writer::empty_tag(
-            'input',
-            [
-                'type' => 'hidden',
-                'name' => 'id',
-                'value' => $cm->id,
-            ]
-        );
-
-        /*
-         * Search inside the participant selector.
-         */
-        echo html_writer::start_div('mb-3');
-
-        echo html_writer::tag(
-            'label',
-            'Pesquisar aluno',
-            [
-                'for' => 'feedbackdashboard-student-search',
-                'class' => 'form-label',
-            ]
-        );
-
-        echo html_writer::empty_tag(
-            'input',
-            [
-                'type' => 'search',
-                'id' => 'feedbackdashboard-student-search',
-                'class' => 'form-control',
-                'placeholder' => 'Digite o nome do aluno...',
-            ]
-        );
-
+        echo html_writer::start_div('row g-3');
+        echo html_writer::start_div('col-12 col-lg-4');
+        echo html_writer::tag('label', 'Pesquisar aluno', [
+            'for' => 'feedbackdashboard-student-search',
+            'class' => 'form-label',
+        ]);
+        echo html_writer::empty_tag('input', [
+            'type' => 'search',
+            'id' => 'feedbackdashboard-student-search',
+            'class' => 'form-control',
+            'placeholder' => 'Digite o nome do aluno...',
+        ]);
         echo html_writer::end_div();
 
-        /*
-         * "All students" option.
-         */
-        $allchecked = empty($selecteduserids);
+        echo html_writer::start_div('col-12 col-lg-8');
+        echo html_writer::start_div('border rounded p-3');
+        echo html_writer::start_div('form-check border-bottom pb-2 mb-2');
 
         $allattributes = [
             'type' => 'checkbox',
@@ -843,45 +758,18 @@ if (!$isanonymous) {
             'class' => 'form-check-input',
             'value' => '1',
         ];
-
-        if ($allchecked) {
+        if (empty($selecteduserids)) {
             $allattributes['checked'] = 'checked';
         }
 
-        echo html_writer::start_div(
-            'border rounded p-3 mb-3'
-        );
-
-        echo html_writer::start_div(
-            'form-check border-bottom pb-2 mb-2'
-        );
-
-        echo html_writer::empty_tag(
-            'input',
-            $allattributes
-        );
-
-        echo html_writer::tag(
-            'label',
-            'Todos os alunos',
-            [
-                'for' => 'feedbackdashboard-filter-all',
-                'class' => 'form-check-label fw-bold',
-            ]
-        );
-
+        echo html_writer::empty_tag('input', $allattributes);
+        echo html_writer::tag('label', 'Todos os alunos', [
+            'for' => 'feedbackdashboard-filter-all',
+            'class' => 'form-check-label fw-bold',
+        ]);
         echo html_writer::end_div();
 
-        /*
-         * Scrollable student list.
-         */
-        echo html_writer::start_div(
-            'overflow-auto',
-            [
-                'style' => 'max-height: 260px;',
-            ]
-        );
-
+        echo html_writer::start_div('overflow-auto', ['style' => 'max-height:190px;']);
         foreach ($responders as $responder) {
             $responderid = (int) $responder->id;
             $respondername = fullname($responder);
@@ -892,271 +780,264 @@ if (!$isanonymous) {
                 'id' => $checkboxid,
                 'name' => 'users[]',
                 'value' => $responderid,
-                'class' => 'form-check-input '
-                    . 'feedbackdashboard-user-checkbox',
+                'class' => 'form-check-input feedbackdashboard-user-checkbox',
             ];
 
-            if (
-                in_array(
-                    $responderid,
-                    $selecteduserids,
-                    true
-                )
-            ) {
+            if (in_array($responderid, $selecteduserids, true)) {
                 $checkboxattributes['checked'] = 'checked';
             }
 
-            echo html_writer::start_div(
-                'form-check py-1 '
-                . 'feedbackdashboard-student-option',
-                [
-                    'data-student-name' => core_text::strtolower(
-                        $respondername
-                    ),
-                ]
-            );
-
-            echo html_writer::empty_tag(
-                'input',
-                $checkboxattributes
-            );
-
-            echo html_writer::tag(
-                'label',
-                s($respondername),
-                [
-                    'for' => $checkboxid,
-                    'class' => 'form-check-label',
-                ]
-            );
-
+            echo html_writer::start_div('form-check py-1 feedbackdashboard-student-option', [
+                'data-student-name' => core_text::strtolower($respondername),
+            ]);
+            echo html_writer::empty_tag('input', $checkboxattributes);
+            echo html_writer::tag('label', s($respondername), [
+                'for' => $checkboxid,
+                'class' => 'form-check-label',
+            ]);
             echo html_writer::end_div();
         }
-
+        echo html_writer::end_div();
+        echo html_writer::end_div();
         echo html_writer::end_div();
         echo html_writer::end_div();
 
-        /*
-         * Fallback buttons in case JavaScript is unavailable.
-         */
-        echo html_writer::start_div(
-            'd-flex align-items-center flex-wrap gap-2'
-        );
+        echo html_writer::start_div('d-flex align-items-center flex-wrap gap-2 mt-3');
+        echo html_writer::tag('button', 'Aplicar filtro', [
+            'type' => 'submit',
+            'class' => 'btn btn-primary',
+        ]);
+        echo html_writer::link($pageurl, 'Limpar filtro', ['class' => 'btn btn-secondary']);
 
-        echo html_writer::tag(
-            'button',
-            'Aplicar filtro',
-            [
-                'type' => 'submit',
-                'class' => 'btn btn-primary',
-            ]
-        );
-
-        echo html_writer::link(
-            $pageurl,
-            'Limpar filtro',
-            [
-                'class' => 'btn btn-secondary',
-            ]
-        );
-
-        if (empty($selecteduserids)) {
-            $selectionmessage = 'Exibindo todos os alunos.';
-        } else {
-            $selectedcount = count($selecteduserids);
-
-            $selectionmessage = $selectedcount === 1
+        $selectionmessage = empty($selecteduserids)
+            ? 'Exibindo todos os alunos.'
+            : (count($selecteduserids) === 1
                 ? '1 aluno selecionado.'
-                : $selectedcount . ' alunos selecionados.';
-        }
+                : count($selecteduserids) . ' alunos selecionados.');
 
-        echo html_writer::tag(
-            'span',
-            $selectionmessage,
-            ['class' => 'text-muted ms-2']
-        );
-
+        echo html_writer::tag('span', $selectionmessage, ['class' => 'text-muted ms-2']);
         echo html_writer::end_div();
         echo html_writer::end_tag('form');
     }
 
     echo html_writer::end_div();
     echo html_writer::end_div();
-}
-
-/*
- * Empty Feedback states.
- */
-if ($questionscount === 0) {
+} else {
     echo $OUTPUT->notification(
-        'Esta pesquisa ainda não possui questões.',
-        'info'
+        'Esta pesquisa é anônima. O NPS é calculado normalmente, porém o filtro por aluno permanece indisponível.',
+        'warning'
     );
-
-    echo $OUTPUT->footer();
-    exit;
 }
 
-if ($filteredresponsecount === 0) {
+/* Dashboard report surface. */
+echo html_writer::start_div('feedbackdashboard-report mb-4');
+
+echo html_writer::tag('h2', 'Feedback de Pesquisa de Satisfação do aluno', [
+    'class' => 'mb-1',
+    'style' => 'color:' . $dark . ';',
+]);
+echo html_writer::tag('div', 'Aula: ' . s(format_string($feedback->name)), [
+    'class' => 'text-muted fst-italic mb-3',
+]);
+
+$metatext = html_writer::tag('strong', 'Curso:') . ' ' . s(format_string($course->fullname))
+    . html_writer::empty_tag('br')
+    . html_writer::tag('strong', 'Respostas submetidas:') . ' ' . $totalresponsecount
+    . html_writer::empty_tag('br')
+    . html_writer::tag('strong', 'Respostas consideradas no filtro:') . ' ' . count($completions)
+    . html_writer::empty_tag('br')
+    . html_writer::tag('strong', 'Questões:') . ' ' . count($items);
+
+if ($npsitem !== null) {
+    $metatext .= html_writer::empty_tag('br')
+        . html_writer::tag('strong', 'Pergunta NPS:') . ' ' . s(format_string($npsitem->name));
+}
+
+echo html_writer::div($metatext, 'feedbackdashboard-meta');
+
+if ($npsitem === null) {
     echo $OUTPUT->notification(
-        empty($selecteduserids)
-            ? 'Esta pesquisa ainda não recebeu respostas.'
-            : 'Nenhuma resposta foi encontrada para os alunos selecionados.',
-        'info'
+        'Nenhuma pergunta de alternativa com escala 0 a 10 foi detectada. '
+        . 'Para calcular NPS, utilize uma pergunta de escolha única com notas de 0 a 10.',
+        'warning'
     );
-}
+} else {
+    $metrics = $npsmetrics;
 
-/*
- * -------------------------------------------------------------------------
- * Multiple-choice charts.
- * -------------------------------------------------------------------------
- */
+    // Five NPS summary cards, matching the report structure.
+    $cards = [
+        [
+            'title' => 'NPS(%)',
+            'value' => format_float($metrics['nps'], 0) . '%',
+            'detail' => 'promotores - detratores',
+            'color' => $primary,
+        ],
+        [
+            'title' => 'Promotores(%)',
+            'value' => format_float($metrics['promoterspct'], 0) . '%',
+            'detail' => $metrics['promoters'] . ' resposta(s)',
+            'color' => $goodcolor,
+        ],
+        [
+            'title' => 'Neutros(%)',
+            'value' => format_float($metrics['neutralspct'], 0) . '%',
+            'detail' => $metrics['neutrals'] . ' resposta(s)',
+            'color' => $neutralcolor,
+        ],
+        [
+            'title' => 'Detratores(%)',
+            'value' => format_float($metrics['detractorspct'], 0) . '%',
+            'detail' => $metrics['detractors'] . ' resposta(s)',
+            'color' => $badcolor,
+        ],
+        [
+            'title' => 'Média',
+            'value' => format_float($metrics['average'], 1),
+            'detail' => $metrics['total'] . ' nota(s) válida(s)',
+            'color' => $dark,
+        ],
+    ];
 
-echo $OUTPUT->heading(
-    'Resultados das perguntas de alternativa',
-    2
-);
-
-$renderedcharts = 0;
-$questionnumber = 0;
-
-foreach ($items as $item) {
-    $questionnumber++;
-
-    if (
-        !in_array(
-            $item->typ,
-            ['multichoice', 'multichoicerated'],
-            true
-        )
-    ) {
-        continue;
+    echo html_writer::start_div('row row-cols-1 row-cols-sm-2 row-cols-xl-5 g-2 mb-3');
+    foreach ($cards as $card) {
+        echo html_writer::start_div('col');
+        echo html_writer::start_div('feedbackdashboard-card', [
+            'style' => '--card-accent:' . $card['color'] . ';',
+        ]);
+        echo html_writer::start_div('feedbackdashboard-card-body');
+        echo html_writer::div(s($card['title']), 'feedbackdashboard-card-title');
+        echo html_writer::div(s($card['value']), 'feedbackdashboard-card-value');
+        echo html_writer::div(s($card['detail']), 'feedbackdashboard-card-detail');
+        echo html_writer::end_div();
+        echo html_writer::end_div();
+        echo html_writer::end_div();
     }
+    echo html_writer::end_div();
 
-    $questionvalues = local_feedbackdashboard_get_question_values(
-        $item,
-        (int) $feedback->id,
-        $selecteduserids,
-        $isanonymous
-    );
+    echo html_writer::start_div('row g-3');
 
-    $chartdata = local_feedbackdashboard_build_choice_chart_data(
-        $item,
-        $questionvalues
-    );
+    // NPS profile distribution.
+    echo html_writer::start_div('col-12 col-xl-6');
+    echo html_writer::start_div('feedbackdashboard-chartbox');
+    echo html_writer::tag('h3', 'Distribuição do NPS por perfil', ['class' => 'h5 mb-3']);
 
-    if ($chartdata === null) {
-        continue;
-    }
+    $profilemax = max(1, $metrics['promoters'], $metrics['neutrals'], $metrics['detractors']);
+    $profiles = [
+        ['label' => 'Promotores', 'count' => $metrics['promoters'], 'pct' => $metrics['promoterspct'], 'color' => $goodcolor],
+        ['label' => 'Neutros', 'count' => $metrics['neutrals'], 'pct' => $metrics['neutralspct'], 'color' => $neutralcolor],
+        ['label' => 'Detratores', 'count' => $metrics['detractors'], 'pct' => $metrics['detractorspct'], 'color' => $badcolor],
+    ];
 
-    $renderedcharts++;
-
-    echo html_writer::start_div('card mb-4');
-    echo html_writer::start_div('card-body');
-
-    $questiontitle = $questionnumber
-        . '. '
-        . format_string($item->name);
-
-    echo $OUTPUT->heading(
-        $questiontitle,
-        3,
-        'h4 card-title'
-    );
-
-    if (!empty($item->label)) {
-        echo html_writer::tag(
-            'div',
-            format_string($item->label),
-            ['class' => 'text-muted mb-2']
+    foreach ($profiles as $profile) {
+        $width = $profile['count'] > 0 ? ($profile['count'] / $profilemax) * 100 : 0;
+        echo html_writer::start_div('feedbackdashboard-nps-row');
+        echo html_writer::div(s($profile['label']), 'feedbackdashboard-nps-label');
+        echo html_writer::start_div('feedbackdashboard-nps-track');
+        echo html_writer::div('', 'feedbackdashboard-nps-fill', [
+            'style' => 'width:' . number_format($width, 2, '.', '') . '%;background:' . $profile['color'] . ';',
+        ]);
+        echo html_writer::end_div();
+        echo html_writer::div(
+            $profile['count'] . ' (' . format_float($profile['pct'], 1) . '%)',
+            'feedbackdashboard-nps-value'
         );
+        echo html_writer::end_div();
     }
 
-    $answerdescription = $chartdata['responseswithvalue'] === 1
-        ? '1 resposta considerada nesta pergunta.'
-        : $chartdata['responseswithvalue']
-            . ' respostas consideradas nesta pergunta.';
+    echo html_writer::end_div();
+    echo html_writer::end_div();
 
-    echo html_writer::tag(
-        'p',
-        $answerdescription,
-        ['class' => 'text-muted']
-    );
+    // Score distribution 0..10 using Moodle's native chart.
+    echo html_writer::start_div('col-12 col-xl-6');
+    echo html_writer::start_div('feedbackdashboard-chartbox');
+    echo html_writer::tag('h3', 'Gráfico de Avaliações por Nota', ['class' => 'h5 mb-2']);
 
-    if ($chartdata['ismultiplecheckbox']) {
-        echo html_writer::tag(
-            'p',
-            'Esta pergunta permite selecionar mais de uma alternativa.',
-            ['class' => 'small text-muted']
-        );
-    }
-
-    /*
-     * Moodle native vertical bar chart.
-     */
     $chart = new \core\chart_bar();
-
     $chart->set_horizontal(false);
-    $chart->set_labels($chartdata['labels']);
+    $chart->set_labels(array_map('strval', range(0, 10)));
+    $chart->set_legend_options(['display' => false]);
 
-    $chart->set_legend_options([
-        'display' => false,
-    ]);
+    $serieslabels = [];
+    foreach ($metrics['scorecounts'] as $count) {
+        $serieslabels[] = (string) $count;
+    }
 
-    $series = new \core\chart_series(
-       'Quantidade de respostas',
-       $chartdata['counts']
-    );
-
-    $series->set_labels(
-       $chartdata['serieslabels']
-   );
-
-   // Use the primary colour configured in the current Moodle theme.
-   $series->set_color($themeprimarycolor);
-
+    $series = new \core\chart_series('Respostas', array_values($metrics['scorecounts']));
+    $series->set_labels($serieslabels);
+    $series->set_color($primary);
     $chart->add_series($series);
 
     echo $OUTPUT->render($chart);
+    echo html_writer::end_div();
+    echo html_writer::end_div();
 
-    /*
-     * Simple table below the chart.
-     */
-    $resultstable = new html_table();
+    echo html_writer::end_div();
 
-    $resultstable->attributes = [
-        'class' => 'generaltable mt-3',
-    ];
+    echo html_writer::tag(
+        'div',
+        'Legenda NPS: notas 9-10 são promotores, 7-8 são neutros e 0-6 são detratores.',
+        ['class' => 'text-muted small text-end mt-2']
+    );
+}
 
-    $resultstable->head = [
-        'Alternativa',
-        'Respostas',
-        'Percentual',
-    ];
+echo html_writer::end_div();
 
-    foreach ($chartdata['labels'] as $index => $label) {
-        $resultstable->data[] = [
-            s($label),
-            (string) $chartdata['counts'][$index],
-            format_float(
-                $chartdata['percentages'][$index],
-                1
-            ) . '%',
+/* Responses table on the web dashboard, corresponding to PDF page 2. */
+echo $OUTPUT->heading('Respostas e comentários', 2);
+
+if (empty($completions)) {
+    echo $OUTPUT->notification('Não há respostas para os filtros atuais.', 'info');
+} else {
+    $responsetable = new html_table();
+    $responsetable->attributes = ['class' => 'generaltable'];
+    $responsetable->head = ['Participante', 'Nota NPS', 'Respostas abertas'];
+
+    $rows = [];
+    $anonymousindex = 0;
+
+    foreach ($completions as $completion) {
+        $anonymousindex++;
+        $name = $isanonymous ? 'Resposta ' . $anonymousindex : fullname($completion);
+        $score = '—';
+
+        if ($npsitem !== null) {
+            $rawscore = (string) ($valuesbycompletion[$completion->id][$npsitem->id] ?? '');
+            $decodedscore = local_feedbackdashboard_decode_nps_score($npsitem, $rawscore);
+            if ($decodedscore !== null) {
+                $score = (string) $decodedscore;
+            }
+        }
+
+        $comments = local_feedbackdashboard_build_open_answers_html(
+            (int) $completion->id,
+            $textitems,
+            $valuesbycompletion
+        );
+
+        $rows[] = [
+            'name' => $name,
+            'score' => $score,
+            'comments' => $comments,
+            'sortscore' => is_numeric($score) ? (int) $score : -1,
         ];
     }
 
-    echo html_writer::table($resultstable);
+    usort($rows, static function(array $a, array $b): int {
+        if ($a['sortscore'] === $b['sortscore']) {
+            return strcasecmp($a['name'], $b['name']);
+        }
+        return $b['sortscore'] <=> $a['sortscore'];
+    });
 
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-}
+    foreach ($rows as $row) {
+        $responsetable->data[] = [
+            s($row['name']),
+            s($row['score']),
+            $row['comments'],
+        ];
+    }
 
-if ($renderedcharts === 0) {
-    echo $OUTPUT->notification(
-        'Esta pesquisa ainda não possui perguntas de alternativa '
-        . 'compatíveis com o gráfico desta versão.',
-        'info'
-    );
+    echo html_writer::table($responsetable);
 }
 
 echo $OUTPUT->footer();
