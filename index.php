@@ -646,19 +646,36 @@ echo $OUTPUT->heading(
 
 echo html_writer::end_div();
 
+/*
+ * PDF download URL.
+ *
+ * The currently selected participants are sent to download.php,
+ * ensuring that the PDF uses exactly the same Dashboard filter.
+ */
+$pdfparams = [
+    'id' => $cm->id,
+];
+
+if (!$isanonymous && !empty($selecteduserids)) {
+    $pdfparams['userids'] = implode(',', $selecteduserids);
+}
+
+$pdfurl = new moodle_url(
+    '/local/feedbackdashboard/download.php',
+    $pdfparams
+);
+
 $pdfbuttoncontent = $OUTPUT->pix_icon(
     't/download',
     ''
 ) . ' Baixar relatório em PDF';
 
-echo html_writer::tag(
-    'button',
+echo html_writer::link(
+    $pdfurl,
     $pdfbuttoncontent,
     [
-        'type' => 'button',
         'class' => 'btn btn-outline-primary',
-        'disabled' => 'disabled',
-        'title' => 'A geração do PDF será implementada na próxima etapa.',
+        'title' => 'Baixar relatório em PDF',
     ]
 );
 
