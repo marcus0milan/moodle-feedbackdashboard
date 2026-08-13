@@ -17,8 +17,8 @@
 defined('MOODLE_INTERNAL') || die();
 
 $plugin = new stdClass();
-$plugin->component = 'local_feedbackdashboard';
-$plugin->version   = 2026081521;
+$plugin->component = 'block_feedbackdashboard';
+$plugin->version   = 2026081522;
 $plugin->requires  = 2024100700;
 $plugin->maturity  = MATURITY_ALPHA;
 $plugin->release   = '1.0.0-alpha';
