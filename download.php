@@ -791,8 +791,76 @@ function local_feedbackdashboard_pdf_draw_score_chart(
     $pdf->Cell($plotw, 4, 'Nota da aula', 0, 0, 'C');
 }
 
+
 /**
- * Draws the response page title and strongly visible table header.
+ * Draws a single table cell using an explicit TCPDF rectangle.
+ *
+ * This avoids relying on MultiCell borders/fills, which can render
+ * inconsistently depending on the PDF viewer.
+ *
+ * @param pdf $pdf PDF object.
+ * @param float $x X position.
+ * @param float $y Y position.
+ * @param float $w Width.
+ * @param float $h Height.
+ * @param string $text Cell text.
+ * @param string $fillcolor Background colour.
+ * @param string $bordercolor Border colour.
+ * @param string $textcolor Text colour.
+ * @param string $align Text alignment.
+ * @param bool $bold Whether to use bold text.
+ * @param float $fontsize Font size.
+ * @return void
+ */
+function local_feedbackdashboard_pdf_draw_table_cell(
+    pdf $pdf,
+    float $x,
+    float $y,
+    float $w,
+    float $h,
+    string $text,
+    string $fillcolor,
+    string $bordercolor,
+    string $textcolor,
+    string $align = 'L',
+    bool $bold = false,
+    float $fontsize = 7.5
+): void {
+    local_feedbackdashboard_pdf_set_fill($pdf, $fillcolor);
+    local_feedbackdashboard_pdf_set_draw($pdf, $bordercolor);
+
+    // Explicit, visible border.
+    $pdf->SetLineWidth(0.45);
+    $pdf->Rect($x, $y, $w, $h, 'DF');
+
+    local_feedbackdashboard_pdf_set_text($pdf, $textcolor);
+    $pdf->SetFont('helvetica', $bold ? 'B' : '', $fontsize);
+
+    // Small inner padding so text does not touch the border.
+    $paddingx = 1.8;
+
+    $pdf->SetXY($x + $paddingx, $y);
+    $pdf->MultiCell(
+        $w - ($paddingx * 2),
+        $h,
+        $text,
+        0,
+        $align,
+        false,
+        0,
+        '',
+        '',
+        true,
+        0,
+        false,
+        true,
+        $h,
+        'M'
+    );
+}
+
+/**
+ * Draws the response page title and the table header.
  *
  * @param pdf $pdf PDF object.
  * @param stdClass $course Course.
@@ -815,88 +883,110 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     bool $continued = false
 ): array {
     $pdf->AddPage();
-    local_feedbackdashboard_pdf_draw_page_base($pdf, $primary, $dark, $light, $logopath);
+    local_feedbackdashboard_pdf_draw_page_base(
+        $pdf,
+        $primary,
+        $dark,
+        $light,
+        $logopath
+    );
 
     $pdf->SetFont('helvetica', 'B', 17);
     local_feedbackdashboard_pdf_set_text($pdf, $dark);
     $pdf->SetXY(12, 16);
-    $pdf->Cell(205, 8, 'Respostas e comentários' . ($continued ? ' - continuação' : ''), 0, 1, 'L');
+    $pdf->Cell(
+        205,
+        8,
+        'Respostas e comentários' . ($continued ? ' - continuação' : ''),
+        0,
+        1,
+        'L'
+    );
 
     $pdf->SetFont('helvetica', '', 8.2);
     local_feedbackdashboard_pdf_set_text($pdf, '#586878');
-    $pdf->SetX(12);
-    $pdf->Cell(210, 4.7, 'Curso: ' . format_string($course->fullname), 0, 1, 'L');
-    $pdf->SetX(12);
-    $pdf->Cell(210, 4.7, 'Pesquisa: ' . format_string($feedback->name), 0, 1, 'L');
 
+    $pdf->SetX(12);
+    $pdf->Cell(
+        210,
+        4.7,
+        'Curso: ' . format_string($course->fullname),
+        0,
+        1,
+        'L'
+    );
+
+    $pdf->SetX(12);
+    $pdf->Cell(
+        210,
+        4.7,
+        'Pesquisa: ' . format_string($feedback->name),
+        0,
+        1,
+        'L'
+    );
+
+    /*
+     * Table geometry.
+     *
+     * Required order:
+     * NOME | NOTA | RESPOSTA
+     */
     $x = 12.0;
     $y = 38.0;
-    $namew = 61.0;
-    $scorew = 36.0;
-    $commentw = $pdf->getPageWidth() - 24 - $namew - $scorew;
+
+    $namew = 65.0;
+    $scorew = 34.0;
+    $responsew = $pdf->getPageWidth() - 24 - $namew - $scorew;
+
     $headerh = 11.0;
 
-    // Strong table borders.
-    local_feedbackdashboard_pdf_set_draw($pdf, '#7C8A99');
-    $pdf->SetLineWidth(0.42);
+    // Darker border so the grid is unmistakably visible.
+    $tableborder = '#667788';
 
-    local_feedbackdashboard_pdf_set_fill($pdf, $primary);
-    local_feedbackdashboard_pdf_set_text($pdf, '#FFFFFF');
-    $pdf->SetFont('helvetica', 'B', 8.0);
-
-    $pdf->SetXY($x, $y);
-    $pdf->MultiCell(
+    local_feedbackdashboard_pdf_draw_table_cell(
+        $pdf,
+        $x,
+        $y,
         $namew,
         $headerh,
-        'Participante',
-        1,
+        'NOME',
+        $primary,
+        $tableborder,
+        '#FFFFFF',
         'C',
         true,
-        0,
-        '',
-        '',
-        true,
-        0,
-        false,
-        true,
-        $headerh,
-        'M'
+        8.2
     );
 
-    $pdf->MultiCell(
+    local_feedbackdashboard_pdf_draw_table_cell(
+        $pdf,
+        $x + $namew,
+        $y,
         $scorew,
         $headerh,
-        'Nota NPS',
-        1,
+        'NOTA',
+        $primary,
+        $tableborder,
+        '#FFFFFF',
         'C',
         true,
-        0,
-        '',
-        '',
-        true,
-        0,
-        false,
-        true,
-        $headerh,
-        'M'
+        8.2
     );
 
-    $pdf->MultiCell(
-        $commentw,
+    local_feedbackdashboard_pdf_draw_table_cell(
+        $pdf,
+        $x + $namew + $scorew,
+        $y,
+        $responsew,
         $headerh,
-        'Respostas abertas / comentários',
-        1,
+        'RESPOSTA',
+        $primary,
+        $tableborder,
+        '#FFFFFF',
         'C',
         true,
-        1,
-        '',
-        '',
-        true,
-        0,
-        false,
-        true,
-        $headerh,
-        'M'
+        8.2
     );
 
     return [
@@ -904,7 +994,8 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
         'y' => $y + $headerh,
         'namew' => $namew,
         'scorew' => $scorew,
-        'commentw' => $commentw,
+        'commentw' => $responsew,
+        'bordercolor' => $tableborder,
     ];
 }
 
@@ -1361,93 +1452,79 @@ if (empty($completions)) {
             );
         }
 
-        $rowfill = ($rowindex % 2 === 0) ? '#F7FAFC' : '#FFFFFF';
+        $rowfill = ($rowindex % 2 === 0)
+            ? '#F7FAFC'
+            : '#FFFFFF';
 
-        local_feedbackdashboard_pdf_set_fill($pdf, $rowfill);
+        $tableborder = $table['bordercolor'] ?? '#667788';
 
-        // Stronger, visible row borders.
-        local_feedbackdashboard_pdf_set_draw($pdf, '#93A1AF');
-        $pdf->SetLineWidth(0.35);
+        /*
+         * Draw every cell explicitly using Rect().
+         *
+         * This guarantees that vertical and horizontal borders remain
+         * visible regardless of PDF viewer rendering differences.
+         */
 
-        local_feedbackdashboard_pdf_set_text($pdf, '#263746');
-        $pdf->SetFont('helvetica', '', 7.3);
-
-        $pdf->SetXY($table['x'], $table['y']);
-
-        $pdf->MultiCell(
+        // NOME.
+        local_feedbackdashboard_pdf_draw_table_cell(
+            $pdf,
+            $table['x'],
+            $table['y'],
             $table['namew'],
             $rowheight,
             $name,
-            1,
+            $rowfill,
+            $tableborder,
+            '#263746',
             'L',
-            true,
-            0,
-            '',
-            '',
-            true,
-            0,
             false,
-            true,
-            $rowheight,
-            'M'
+            7.5
         );
 
-        // Highlight the NPS score cell subtly according to the score.
+        // NOTA.
+        $scorefill = $rowfill;
+
         if (is_numeric($scorevalue)) {
             $scoreint = (int) $scorevalue;
 
             if ($scoreint >= 9) {
-                local_feedbackdashboard_pdf_set_fill($pdf, '#DDF2EC');
+                $scorefill = '#DDF2EC';
             } else if ($scoreint >= 7) {
-                local_feedbackdashboard_pdf_set_fill($pdf, '#FFF3CD');
+                $scorefill = '#FFF3CD';
             } else {
-                local_feedbackdashboard_pdf_set_fill($pdf, '#FCE3DE');
+                $scorefill = '#FCE3DE';
             }
-        } else {
-            local_feedbackdashboard_pdf_set_fill($pdf, $rowfill);
         }
 
-        local_feedbackdashboard_pdf_set_draw($pdf, '#93A1AF');
-        $pdf->SetLineWidth(0.35);
-
-        $pdf->MultiCell(
+        local_feedbackdashboard_pdf_draw_table_cell(
+            $pdf,
+            $table['x'] + $table['namew'],
+            $table['y'],
             $table['scorew'],
             $rowheight,
             $scorevalue,
-            1,
+            $scorefill,
+            $tableborder,
+            '#263746',
             'C',
             true,
-            0,
-            '',
-            '',
-            true,
-            0,
-            false,
-            true,
-            $rowheight,
-            'M'
+            7.7
         );
 
-        local_feedbackdashboard_pdf_set_fill($pdf, $rowfill);
-        local_feedbackdashboard_pdf_set_draw($pdf, '#93A1AF');
-        $pdf->SetLineWidth(0.35);
-
-        $pdf->MultiCell(
+        // RESPOSTA.
+        local_feedbackdashboard_pdf_draw_table_cell(
+            $pdf,
+            $table['x'] + $table['namew'] + $table['scorew'],
+            $table['y'],
             $table['commentw'],
             $rowheight,
             $commentvalue,
-            1,
+            $rowfill,
+            $tableborder,
+            '#263746',
             'L',
-            true,
-            1,
-            '',
-            '',
-            true,
-            0,
             false,
-            true,
-            $rowheight,
-            'M'
+            7.5
         );
 
         $table['y'] += $rowheight;
