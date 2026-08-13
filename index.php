@@ -668,21 +668,105 @@ echo $OUTPUT->header();
 
 // Lightweight dashboard styling. Theme colours are injected from Moodle configuration.
 $dashboardcss = '
-.feedbackdashboard-report {background:' . $light . '; border-top:5px solid ' . $primary . '; padding:1.5rem; border-radius:.35rem;}
-.feedbackdashboard-meta {background:#fff; border:1px solid ' . $border . '; padding:.75rem 1rem; margin-bottom:1rem;}
-.feedbackdashboard-card {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; height:100%; position:relative; overflow:hidden;}
-.feedbackdashboard-card::before {content:""; display:block; height:4px; background:var(--card-accent,' . $primary . ');}
-.feedbackdashboard-card-body {padding:.65rem .75rem .8rem; text-align:center;}
-.feedbackdashboard-card-title {font-weight:600; color:#536271; font-size:.88rem;}
-.feedbackdashboard-card-value {font-size:1.9rem; line-height:1.15; font-weight:700; color:' . $dark . '; margin:.2rem 0;}
-.feedbackdashboard-card-detail {color:#637083; font-size:.78rem;}
-.feedbackdashboard-chartbox {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; padding:1rem; height:100%;}
-.feedbackdashboard-nps-row {display:grid; grid-template-columns:90px 1fr 92px; align-items:center; gap:.65rem; margin:.8rem 0;}
-.feedbackdashboard-nps-label {font-size:.82rem; font-weight:600; color:#536271;}
-.feedbackdashboard-nps-track {height:24px; background:#eef2f6; border-radius:3px; overflow:hidden;}
-.feedbackdashboard-nps-fill {height:100%; min-width:0; border-radius:3px;}
-.feedbackdashboard-nps-value {font-size:.8rem; font-weight:600; color:' . $dark . '; text-align:right;}
-@media (max-width: 767.98px) {.feedbackdashboard-nps-row {grid-template-columns:80px 1fr;}.feedbackdashboard-nps-value {grid-column:2; text-align:left; margin-top:-.4rem;}}
+.feedbackdashboard-score-chart {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+}
+
+.feedbackdashboard-score-plot {
+    display: grid;
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+    align-items: end;
+
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    height: 300px;
+
+    gap: clamp(2px, 0.6vw, 8px);
+
+    padding: 24px clamp(2px, 0.5vw, 8px) 30px;
+
+    box-sizing: border-box;
+
+    border-left: 1px solid #d9dee5;
+    border-bottom: 1px solid #d9dee5;
+
+    overflow: hidden;
+}
+
+.feedbackdashboard-score-column {
+    position: relative;
+
+    display: flex;
+    flex-direction: column;
+
+    justify-content: flex-end;
+    align-items: center;
+
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+}
+
+.feedbackdashboard-score-bar-area {
+    display: flex;
+
+    align-items: flex-end;
+    justify-content: center;
+
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+}
+
+.feedbackdashboard-score-bar {
+    position: relative;
+
+    width: 70%;
+    max-width: 42px;
+    min-width: 0;
+
+    border-radius: 3px 3px 0 0;
+}
+
+.feedbackdashboard-score-count {
+    position: absolute;
+
+    top: -20px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    font-size: 12px;
+    font-weight: 600;
+
+    white-space: nowrap;
+}
+
+.feedbackdashboard-score-label {
+    position: absolute;
+
+    bottom: -24px;
+    left: 50%;
+
+    transform: translateX(-50%);
+
+    font-size: 12px;
+
+    white-space: nowrap;
+}
+
+.feedbackdashboard-score-axis-title {
+    text-align: center;
+    margin-top: 8px;
+
+    font-size: 12px;
+    color: #637083;
+}
 ';
 
 echo html_writer::tag('style', $dashboardcss);
@@ -952,22 +1036,104 @@ if ($npsitem === null) {
     echo html_writer::start_div('feedbackdashboard-chartbox');
     echo html_writer::tag('h3', 'Gráfico de Avaliações por Nota', ['class' => 'h5 mb-2']);
 
-    $chart = new \core\chart_bar();
-    $chart->set_horizontal(false);
-    $chart->set_labels(array_map('strval', range(0, 10)));
-    $chart->set_legend_options(['display' => false]);
+    /*
+ * Responsive score distribution chart (0..10).
+ *
+ * Uses pure HTML/CSS so the chart always respects the
+ * available width of the Dashboard card.
+ */
 
-    $serieslabels = [];
-    foreach ($metrics['scorecounts'] as $count) {
-        $serieslabels[] = (string) $count;
+$scorecounts = array_values($metrics['scorecounts']);
+
+$maxscorecount = !empty($scorecounts)
+    ? max($scorecounts)
+    : 0;
+
+$maxscorecount = max(1, (int) $maxscorecount);
+
+echo html_writer::start_div(
+    'feedbackdashboard-score-chart'
+);
+
+echo html_writer::start_div(
+    'feedbackdashboard-score-plot'
+);
+
+foreach (range(0, 10) as $score) {
+
+    $count = (int) ($scorecounts[$score] ?? 0);
+
+    $heightpercentage = (
+        $count / $maxscorecount
+    ) * 100;
+
+    if ($count === 0) {
+        $heightpercentage = 0;
     }
 
-    $series = new \core\chart_series('Respostas', array_values($metrics['scorecounts']));
-    $series->set_labels($serieslabels);
-    $series->set_color($primary);
-    $chart->add_series($series);
+    echo html_writer::start_div(
+        'feedbackdashboard-score-column'
+    );
 
-    echo $OUTPUT->render($chart);
+    echo html_writer::start_div(
+        'feedbackdashboard-score-bar-area'
+    );
+
+    $barcontent = '';
+
+    if ($count > 0) {
+        $barcontent = html_writer::span(
+            (string) $count,
+            'feedbackdashboard-score-count'
+        );
+    }
+
+    echo html_writer::div(
+        $barcontent,
+        'feedbackdashboard-score-bar',
+        [
+            'style' =>
+                'height:' .
+                number_format(
+                    $heightpercentage,
+                    2,
+                    '.',
+                    ''
+                ) .
+                '%;' .
+                'background:' .
+                $primary .
+                ';',
+
+            'title' =>
+                'Nota ' .
+                $score .
+                ': ' .
+                $count .
+                ' resposta(s)',
+        ]
+    );
+
+    echo html_writer::end_div();
+
+    echo html_writer::span(
+        (string) $score,
+        'feedbackdashboard-score-label'
+    );
+
+    echo html_writer::end_div();
+}
+
+echo html_writer::end_div();
+
+echo html_writer::div(
+    'Nota da aula',
+    'feedbackdashboard-score-axis-title'
+);
+
+echo html_writer::end_div();
+
+
     echo html_writer::end_div();
     echo html_writer::end_div();
 
