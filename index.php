@@ -676,7 +676,32 @@ $dashboardcss = '
 .feedbackdashboard-card-title {font-weight:600; color:#536271; font-size:.88rem;}
 .feedbackdashboard-card-value {font-size:1.9rem; line-height:1.15; font-weight:700; color:' . $dark . '; margin:.2rem 0;}
 .feedbackdashboard-card-detail {color:#637083; font-size:.78rem;}
-.feedbackdashboard-chartbox {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; padding:1rem; height:100%;}
+
+.feedbackdashboard-chartbox {
+    background:#fff;
+    border:1px solid ' . $border . ';
+    border-radius:.25rem;
+    padding:1rem;
+    height:100%;
+    width:100%;
+    max-width:100%;
+    min-width:0;
+    overflow:hidden;
+    box-sizing:border-box;
+}
+
+.feedbackdashboard-chartbox .chart-area {
+    width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    overflow:hidden;
+}
+
+.feedbackdashboard-chartbox canvas {
+    display:block;
+    max-width:100% !important;
+}
+
 .feedbackdashboard-nps-row {display:grid; grid-template-columns:90px 1fr 92px; align-items:center; gap:.65rem; margin:.8rem 0;}
 .feedbackdashboard-nps-label {font-size:.82rem; font-weight:600; color:#536271;}
 .feedbackdashboard-nps-track {height:24px; background:#eef2f6; border-radius:3px; overflow:hidden;}
@@ -917,7 +942,10 @@ if ($npsitem === null) {
     echo html_writer::start_div('row g-3');
 
     // NPS profile distribution.
-    echo html_writer::start_div('col-12 col-xl-6');
+    echo html_writer::start_div(
+    'col-12 col-xl-6',
+    ['style' => 'min-width:0;']
+    );
     echo html_writer::start_div('feedbackdashboard-chartbox');
     echo html_writer::tag('h3', 'Distribuição do NPS por perfil', ['class' => 'h5 mb-3']);
 
@@ -948,7 +976,10 @@ if ($npsitem === null) {
     echo html_writer::end_div();
 
     // Score distribution 0..10 using Moodle's native chart.
-    echo html_writer::start_div('col-12 col-xl-6');
+    echo html_writer::start_div(
+    'col-12 col-xl-6',
+    ['style' => 'min-width:0;']
+    );
     echo html_writer::start_div('feedbackdashboard-chartbox');
     echo html_writer::tag('h3', 'Gráfico de Avaliações por Nota', ['class' => 'h5 mb-2']);
 
