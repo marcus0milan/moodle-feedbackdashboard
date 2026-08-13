@@ -12,66 +12,64 @@
 defined('MOODLE_INTERNAL') || die();
 
 /**
- * Adds a native-looking Dashboard NPS button beside
- * "Exportar para o Excel" on the Feedback analysis page.
+ * Adds the Dashboard NPS button to the native Feedback analysis page.
  *
- * @return void
+ * @return string
  */
-function local_feedbackdashboard_before_footer(): void {
-    global $PAGE;
+function local_feedbackdashboard_before_standard_top_of_body_html(): string {
+    global $PAGE, $SCRIPT;
 
     /*
-     * Must be inside a course module.
+     * Run ONLY on:
+     *
+     * /mod/feedback/analysis.php
+     */
+    if ($SCRIPT !== '/mod/feedback/analysis.php') {
+        return '';
+    }
+
+    /*
+     * Make sure we are inside a course module.
      */
     if (empty($PAGE->cm)) {
-        return;
+        return '';
     }
 
     /*
-     * Only inside Moodle Feedback activities.
+     * Only native Feedback activities.
      */
     if ($PAGE->cm->modname !== 'feedback') {
-        return;
+        return '';
     }
 
-    /*
-     * Only on:
-     *
-     * /mod/feedback/analysis.php?id=...
-     *
-     * Using the path instead of a hardcoded localhost URL means this
-     * also works if Moodle is installed in a subdirectory.
-     */
-    $currentpath = $PAGE->url->get_path();
-
-    if (!str_ends_with($currentpath, '/mod/feedback/analysis.php')) {
-        return;
-    }
+    $context = context_module::instance(
+        $PAGE->cm->id
+    );
 
     /*
-     * Activity context.
-     */
-    $context = context_module::instance($PAGE->cm->id);
-
-    /*
-     * Only users allowed to access the Dashboard and Feedback reports
-     * should see the button.
+     * Only administrators / editing teachers who can
+     * access Feedback reports and our Dashboard.
      */
     if (
-        !has_capability(
-            'local/feedbackdashboard:view',
-            $context
-        ) ||
         !has_capability(
             'mod/feedback:viewreports',
             $context
         )
     ) {
-        return;
+        return '';
+    }
+
+    if (
+        !has_capability(
+            'local/feedbackdashboard:view',
+            $context
+        )
+    ) {
+        return '';
     }
 
     /*
-     * Build the Dashboard URL using the current course-module ID.
+     * Dashboard URL for THIS Feedback.
      *
      * Example:
      *
@@ -88,22 +86,8 @@ function local_feedbackdashboard_before_footer(): void {
         ]
     );
 
-    /*
-     * Prepare PHP values safely for JavaScript.
-     */
-    $dashboardurljson = json_encode(
+    $urljson = json_encode(
         $dashboardurl->out(false),
-        JSON_HEX_TAG |
-        JSON_HEX_APOS |
-        JSON_HEX_AMP |
-        JSON_HEX_QUOT
-    );
-
-    $dashboardlabeljson = json_encode(
-        get_string(
-            'dashboardbutton',
-            'local_feedbackdashboard'
-        ),
         JSON_HEX_TAG |
         JSON_HEX_APOS |
         JSON_HEX_AMP |
@@ -115,232 +99,239 @@ function local_feedbackdashboard_before_footer(): void {
     );
 
     /*
-     * Clone Moodle's own "Exportar para o Excel" button.
+     * We return the script directly instead of using
+     * $PAGE->requires.
      *
-     * This is intentional:
-     *
-     * - same Bootstrap/Moodle classes;
-     * - same spacing;
-     * - same height;
-     * - same border;
-     * - same theme behaviour.
+     * The callback is executed before the body content
+     * is rendered, therefore the script waits for
+     * DOMContentLoaded.
      */
-    $javascript = <<<JS
-(function() {
-    'use strict';
+    return <<<HTML
+<style>
+    .form-buttons.feedbackdashboard-actions {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .5rem;
+    }
+</style>
 
-    const dashboardUrl = {$dashboardurljson};
-    const dashboardLabel = {$dashboardlabeljson};
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+
+    const dashboardUrl = {$urljson};
     const cmId = {$cmidjson};
 
-    function addDashboardButton() {
+    /*
+     * Moodle creates the native Excel button inside:
+     *
+     * <div class="form-buttons">
+     */
+    const container = document.querySelector(
+        '.form-buttons'
+    );
 
-        /*
-         * Prevent duplication.
-         */
-        if (
-            document.querySelector(
-                '[data-feedbackdashboard-button="1"]'
-            )
-        ) {
-            return true;
-        }
-
-        /*
-         * Moodle 4.5 creates the Export to Excel button inside:
-         *
-         * <div class="form-buttons">
-         */
-        const container = document.querySelector(
-            '.form-buttons'
+    if (!container) {
+        console.warn(
+            '[Feedback Dashboard] form-buttons não encontrado.'
         );
 
-        if (!container) {
-            return false;
-        }
+        return;
+    }
 
-        /*
-         * First try to locate the exact native Excel form.
-         */
-        let exportForm = container.querySelector(
-            'form[action*="analysis_to_excel.php"]'
+    /*
+     * Avoid duplicate buttons.
+     */
+    if (
+        container.querySelector(
+            '[data-feedbackdashboard="1"]'
+        )
+    ) {
+        return;
+    }
+
+    /*
+     * Locate Moodle's native Export to Excel form.
+     */
+    const exportForm = container.querySelector(
+        'form'
+    );
+
+    if (!exportForm) {
+        console.warn(
+            '[Feedback Dashboard] formulário de exportação não encontrado.'
         );
 
-        /*
-         * Fallback in case Moodle/theme changes the absolute action.
-         */
-        if (!exportForm) {
-            exportForm = container.querySelector('form');
-        }
+        return;
+    }
 
-        if (!exportForm) {
-            return false;
-        }
+    /*
+     * single_button normally has this structure:
+     *
+     * <div class="singlebutton">
+     *     <form>
+     *         <button class="btn ...">
+     *     </form>
+     * </div>
+     *
+     * Clone the complete Moodle structure so Dashboard
+     * receives exactly the same visual style.
+     */
+    const originalWrapper =
+        exportForm.closest('.singlebutton');
 
-        /*
-         * Moodle's single_button normally wraps the form inside
-         * .singlebutton.
-         *
-         * Clone the complete wrapper so our button looks exactly
-         * like the native button.
-         */
-        const originalWrapper =
-            exportForm.closest('.singlebutton');
+    let dashboardWrapper;
 
-        const dashboardWrapper = originalWrapper
-            ? originalWrapper.cloneNode(true)
-            : exportForm.cloneNode(true);
+    if (originalWrapper) {
 
-        dashboardWrapper.setAttribute(
-            'data-feedbackdashboard-button',
-            '1'
+        dashboardWrapper =
+            originalWrapper.cloneNode(true);
+
+    } else {
+
+        dashboardWrapper =
+            exportForm.cloneNode(true);
+
+    }
+
+    dashboardWrapper.setAttribute(
+        'data-feedbackdashboard',
+        '1'
+    );
+
+    /*
+     * Find the cloned form.
+     */
+    let dashboardForm;
+
+    if (
+        dashboardWrapper.tagName &&
+        dashboardWrapper.tagName.toLowerCase() === 'form'
+    ) {
+
+        dashboardForm = dashboardWrapper;
+
+    } else {
+
+        dashboardForm =
+            dashboardWrapper.querySelector('form');
+
+    }
+
+    if (!dashboardForm) {
+        console.warn(
+            '[Feedback Dashboard] clone do formulário falhou.'
         );
 
-        /*
-         * Locate the cloned form.
-         */
-        let dashboardForm = null;
+        return;
+    }
 
-        if (
-            dashboardWrapper.tagName &&
-            dashboardWrapper.tagName.toLowerCase() === 'form'
-        ) {
-            dashboardForm = dashboardWrapper;
-        } else {
-            dashboardForm =
-                dashboardWrapper.querySelector('form');
-        }
+    /*
+     * Replace the Excel destination with Dashboard.
+     */
+    dashboardForm.action = dashboardUrl;
+    dashboardForm.method = 'get';
 
-        if (!dashboardForm) {
-            return false;
-        }
+    /*
+     * Remove Excel parameters such as:
+     *
+     * sesskey
+     * old id
+     */
+    dashboardForm
+        .querySelectorAll(
+            'input[type="hidden"]'
+        )
+        .forEach(function(input) {
 
-        /*
-         * Change the cloned form destination.
-         */
-        dashboardForm.setAttribute(
-            'action',
-            dashboardUrl
-        );
+            input.remove();
 
-        dashboardForm.setAttribute(
-            'method',
-            'get'
-        );
+        });
 
-        /*
-         * Remove parameters belonging to the Excel export,
-         * such as sesskey and its old id field.
-         */
-        dashboardForm
-            .querySelectorAll('input[type="hidden"]')
-            .forEach(function(input) {
-                input.remove();
-            });
+    /*
+     * Add the current Feedback ID.
+     */
+    const idInput =
+        document.createElement('input');
 
-        /*
-         * Add only the current Feedback course-module ID.
-         */
-        const idInput = document.createElement('input');
+    idInput.type = 'hidden';
+    idInput.name = 'id';
+    idInput.value = String(cmId);
 
-        idInput.type = 'hidden';
-        idInput.name = 'id';
-        idInput.value = String(cmId);
+    dashboardForm.prepend(
+        idInput
+    );
 
-        dashboardForm.prepend(idInput);
-
-        /*
-         * Find Moodle's cloned button.
-         */
-        const button = dashboardForm.querySelector(
+    /*
+     * Locate Moodle's cloned button.
+     */
+    const button =
+        dashboardForm.querySelector(
             'button[type="submit"], ' +
             'input[type="submit"], ' +
             '.btn'
         );
 
-        if (!button) {
-            return false;
-        }
-
-        /*
-         * Only change its text.
-         *
-         * CSS/classes remain exactly those generated by Moodle.
-         */
-        if (
-            button.tagName.toLowerCase() === 'input'
-        ) {
-            button.value = dashboardLabel;
-        } else {
-            button.textContent = dashboardLabel;
-        }
-
-        button.setAttribute(
-            'title',
-            dashboardLabel
+    if (!button) {
+        console.warn(
+            '[Feedback Dashboard] botão nativo não encontrado.'
         );
 
-        /*
-         * Keep both buttons on the same line using Moodle/
-         * Bootstrap utility classes.
-         */
-        container.classList.add(
-            'd-flex',
-            'flex-wrap',
-            'align-items-center',
-            'gap-2'
-        );
-
-        /*
-         * Place immediately after Export to Excel.
-         */
-        if (originalWrapper) {
-            originalWrapper.insertAdjacentElement(
-                'afterend',
-                dashboardWrapper
-            );
-        } else {
-            exportForm.insertAdjacentElement(
-                'afterend',
-                dashboardWrapper
-            );
-        }
-
-        return true;
-    }
-
-    /*
-     * The analysis page normally exists already when footer JS runs.
-     */
-    if (addDashboardButton()) {
         return;
     }
 
     /*
-     * Safety fallback for themes that render page content later.
+     * Change only the text.
+     *
+     * The native Moodle classes remain untouched.
      */
-    const observer = new MutationObserver(function() {
-        if (addDashboardButton()) {
-            observer.disconnect();
-        }
-    });
+    if (
+        button.tagName.toLowerCase() === 'input'
+    ) {
 
-    observer.observe(
-        document.body,
-        {
-            childList: true,
-            subtree: true
-        }
+        button.value =
+            'Dashboard NPS';
+
+    } else {
+
+        button.textContent =
+            'Dashboard NPS';
+
+    }
+
+    button.title =
+        'Abrir Dashboard NPS';
+
+    /*
+     * Keep both actions on the same row.
+     */
+    container.classList.add(
+        'feedbackdashboard-actions'
     );
 
-    window.setTimeout(function() {
-        observer.disconnect();
-    }, 10000);
+    /*
+     * Insert directly after Exportar para o Excel.
+     */
+    if (originalWrapper) {
 
-})();
-JS;
+        originalWrapper.insertAdjacentElement(
+            'afterend',
+            dashboardWrapper
+        );
 
-    $PAGE->requires->js_init_code(
-        $javascript
+    } else {
+
+        exportForm.insertAdjacentElement(
+            'afterend',
+            dashboardWrapper
+        );
+
+    }
+
+    console.info(
+        '[Feedback Dashboard] botão inserido com sucesso.'
     );
+});
+</script>
+HTML;
 }
