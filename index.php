@@ -668,6 +668,59 @@ echo $OUTPUT->header();
 
 // Lightweight dashboard styling. Theme colours are injected from Moodle configuration.
 $dashboardcss = '
+.feedbackdashboard-report {
+    background:' . $light . ';
+    border-top:5px solid ' . $primary . ';
+    padding:1.5rem;
+    border-radius:.35rem;
+}
+
+.feedbackdashboard-meta {
+    background:#fff;
+    border:1px solid ' . $border . ';
+    padding:.75rem 1rem;
+    margin-bottom:1rem;
+}
+
+.feedbackdashboard-card {
+    background:#fff;
+    border:1px solid ' . $border . ';
+    border-radius:.25rem;
+    height:100%;
+    position:relative;
+    overflow:hidden;
+}
+
+.feedbackdashboard-card::before {
+    content:"";
+    display:block;
+    height:4px;
+    background:var(--card-accent, ' . $primary . ');
+}
+
+.feedbackdashboard-card-body {
+    padding:.65rem .75rem .8rem;
+    text-align:center;
+}
+
+.feedbackdashboard-card-title {
+    font-weight:600;
+    color:#536271;
+    font-size:.88rem;
+}
+
+.feedbackdashboard-card-value {
+    font-size:1.9rem;
+    line-height:1.15;
+    font-weight:700;
+    color:' . $dark . ';
+    margin:.2rem 0;
+}
+
+.feedbackdashboard-card-detail {
+    color:#637083;
+    font-size:.78rem;
+}
 .feedbackdashboard-nps-row {
     display:grid;
     grid-template-columns:90px minmax(0, 1fr) 92px;
