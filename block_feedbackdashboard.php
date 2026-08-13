@@ -17,7 +17,7 @@ defined('MOODLE_INTERNAL') || die();
 class block_feedbackdashboard extends block_base {
 
     /**
-     * Initialise block.
+     * Initialise the block.
      *
      * @return void
      */
@@ -29,7 +29,7 @@ class block_feedbackdashboard extends block_base {
     }
 
     /**
-     * Only allow this block on Feedback module pages.
+     * Allow the block only on Feedback activity pages.
      *
      * @return array
      */
@@ -50,11 +50,13 @@ class block_feedbackdashboard extends block_base {
     }
 
     /**
-     * Generates block content.
+     * Build the block content.
      *
      * @return stdClass
      */
     public function get_content() {
+        global $PAGE;
+
         if ($this->content !== null) {
             return $this->content;
         }
@@ -64,25 +66,78 @@ class block_feedbackdashboard extends block_base {
         $this->content->footer = '';
 
         /*
-         * Must belong to a course module.
+         * Try to get the current course-module ID.
+         *
+         * First from the page object.
          */
-        if (empty($this->page->cm)) {
+        $cmid = 0;
+
+        if (
+            !empty($this->page->cm) &&
+            !empty($this->page->cm->id)
+        ) {
+            $cmid = (int) $this->page->cm->id;
+        }
+
+        /*
+         * Fallback:
+         * analysis.php?id=7
+         */
+        if ($cmid <= 0) {
+            $cmid = optional_param(
+                'id',
+                0,
+                PARAM_INT
+            );
+        }
+
+        /*
+         * No valid activity ID.
+         */
+        if ($cmid <= 0) {
+            $this->content->text =
+                html_writer::div(
+                    'Não foi possível identificar esta pesquisa.',
+                    'small text-muted'
+                );
+
             return $this->content;
         }
 
         /*
-         * Only Feedback.
+         * Validate that the ID really belongs to a Feedback activity.
          */
-        if ($this->page->cm->modname !== 'feedback') {
+        $cm = get_coursemodule_from_id(
+            'feedback',
+            $cmid,
+            0,
+            false,
+            IGNORE_MISSING
+        );
+
+        if (!$cm) {
+            $this->content->text =
+                html_writer::div(
+                    'Este bloco está disponível apenas em atividades de Feedback.',
+                    'small text-muted'
+                );
+
             return $this->content;
         }
 
+        /*
+         * Activity context.
+         */
         $context = context_module::instance(
-            $this->page->cm->id
+            $cm->id
         );
 
         /*
-         * Same permissions used by the Dashboard.
+         * Use Moodle's native Feedback report capability.
+         *
+         * Administrators pass this automatically.
+         * Editing teachers normally receive this capability as part
+         * of their Feedback permissions.
          */
         if (
             !has_capability(
@@ -90,47 +145,55 @@ class block_feedbackdashboard extends block_base {
                 $context
             )
         ) {
+            $this->content->text =
+                html_writer::div(
+                    'Você não possui permissão para visualizar este Dashboard.',
+                    'small text-muted'
+                );
+
             return $this->content;
         }
 
-        if (
-            !has_capability(
-                'local/feedbackdashboard:view',
-                $context
-            )
-        ) {
-            return $this->content;
-        }
-
+        /*
+         * URL of the Dashboard for THIS Feedback.
+         *
+         * Example:
+         * /local/feedbackdashboard/index.php?id=7
+         */
         $dashboardurl = new moodle_url(
             '/local/feedbackdashboard/index.php',
             [
-                'id' => $this->page->cm->id,
+                'id' => $cm->id,
             ]
         );
 
         /*
-         * Use Moodle's standard button classes.
+         * Short native-looking description.
          */
-        $button = html_writer::link(
-            $dashboardurl,
-            get_string(
-                'opendashboard',
-                'block_feedbackdashboard'
-            ),
+        $description = html_writer::tag(
+            'p',
+            'Visualize o NPS, gráficos, respostas e relatório desta pesquisa.',
             [
-                'class' => 'btn btn-primary w-100',
+                'class' => 'small text-muted mb-3',
             ]
         );
 
-        $description = html_writer::tag(
-            'p',
-            get_string(
-                'description',
-                'block_feedbackdashboard'
-            ),
+        /*
+         * Moodle / Bootstrap native button.
+         */
+        $buttoncontent =
+            $OUTPUT->pix_icon(
+                'i/report',
+                ''
+            )
+            . ' Abrir Dashboard NPS';
+
+        $button = html_writer::link(
+            $dashboardurl,
+            $buttoncontent,
             [
-                'class' => 'small text-muted mb-3',
+                'class' => 'btn btn-primary w-100',
+                'title' => 'Abrir Dashboard NPS desta pesquisa',
             ]
         );
 
