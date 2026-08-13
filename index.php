@@ -668,6 +668,57 @@ echo $OUTPUT->header();
 
 // Lightweight dashboard styling. Theme colours are injected from Moodle configuration.
 $dashboardcss = '
+.feedbackdashboard-nps-row {
+    display:grid;
+    grid-template-columns:90px minmax(0, 1fr) 92px;
+    align-items:center;
+    gap:.65rem;
+    margin:.8rem 0;
+    width:100%;
+    min-width:0;
+}
+
+.feedbackdashboard-nps-label {
+    font-size:.82rem;
+    font-weight:600;
+    color:#536271;
+    white-space:nowrap;
+}
+
+.feedbackdashboard-nps-track {
+    width:100%;
+    min-width:0;
+    height:24px;
+    background:#eef2f6;
+    border-radius:3px;
+    overflow:hidden;
+}
+
+.feedbackdashboard-nps-fill {
+    height:100%;
+    min-width:0;
+    border-radius:3px;
+}
+
+.feedbackdashboard-nps-value {
+    font-size:.8rem;
+    font-weight:600;
+    color:' . $dark . ';
+    text-align:right;
+    white-space:nowrap;
+}
+
+@media (max-width:767.98px) {
+    .feedbackdashboard-nps-row {
+        grid-template-columns:80px minmax(0, 1fr);
+    }
+
+    .feedbackdashboard-nps-value {
+        grid-column:2;
+        text-align:left;
+        margin-top:-.4rem;
+    }
+}
 .feedbackdashboard-score-chart {
     width: 100%;
     max-width: 100%;
