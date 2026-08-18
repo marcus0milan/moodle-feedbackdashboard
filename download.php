@@ -791,6 +791,74 @@ function local_feedbackdashboard_pdf_draw_score_chart(
     $pdf->Cell($plotw, 4, 'Nota da aula', 0, 0, 'C');
 }
 
+
+/**
+ * Draws a single table cell using an explicit TCPDF rectangle.
+ *
+ * This avoids relying on MultiCell borders/fills, which can render
+ * inconsistently depending on the PDF viewer.
+ *
+ * @param pdf $pdf PDF object.
+ * @param float $x X position.
+ * @param float $y Y position.
+ * @param float $w Width.
+ * @param float $h Height.
+ * @param string $text Cell text.
+ * @param string $fillcolor Background colour.
+ * @param string $bordercolor Border colour.
+ * @param string $textcolor Text colour.
+ * @param string $align Text alignment.
+ * @param bool $bold Whether to use bold text.
+ * @param float $fontsize Font size.
+ * @return void
+ */
+function local_feedbackdashboard_pdf_draw_table_cell(
+    pdf $pdf,
+    float $x,
+    float $y,
+    float $w,
+    float $h,
+    string $text,
+    string $fillcolor,
+    string $bordercolor,
+    string $textcolor,
+    string $align = 'L',
+    bool $bold = false,
+    float $fontsize = 7.5
+): void {
+    local_feedbackdashboard_pdf_set_fill($pdf, $fillcolor);
+    local_feedbackdashboard_pdf_set_draw($pdf, $bordercolor);
+
+    // Explicit, visible border.
+    $pdf->SetLineWidth(0.45);
+    $pdf->Rect($x, $y, $w, $h, 'DF');
+
+    local_feedbackdashboard_pdf_set_text($pdf, $textcolor);
+    $pdf->SetFont('helvetica', $bold ? 'B' : '', $fontsize);
+
+    // Small inner padding so text does not touch the border.
+    $paddingx = 1.8;
+
+    $pdf->SetXY($x + $paddingx, $y);
+    $pdf->MultiCell(
+        $w - ($paddingx * 2),
+        $h,
+        $text,
+        0,
+        $align,
+        false,
+        0,
+        '',
+        '',
+        true,
+        0,
+        false,
+        true,
+        $h,
+        'M'
+    );
+}
+
 /**
  * Draws the second PDF page and its institutional table header.
  *
@@ -817,7 +885,6 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     ?string $logopath,
     bool $continued = false
 ): array {
-
     $pdf->AddPage();
 
     local_feedbackdashboard_pdf_draw_page_base(
@@ -833,21 +900,14 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
      * Page title.
      * -------------------------------------------------------------
      */
-
     $pdf->SetFont('helvetica', 'B', 17);
-
-    local_feedbackdashboard_pdf_set_text(
-        $pdf,
-        $dark
-    );
-
+    local_feedbackdashboard_pdf_set_text($pdf, $dark);
     $pdf->SetXY(12, 16);
 
     $pdf->Cell(
         205,
         8,
-        'Respostas e comentários'
-            . ($continued ? ' - continuação' : ''),
+        'Respostas e comentários' . ($continued ? ' - continuação' : ''),
         0,
         1,
         'L'
@@ -856,20 +916,10 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     /*
      * Course and Feedback identification.
      */
-
-    $pdf->SetFont(
-        'helvetica',
-        '',
-        8.2
-    );
-
-    local_feedbackdashboard_pdf_set_text(
-        $pdf,
-        '#586878'
-    );
+    $pdf->SetFont('helvetica', '', 8.2);
+    local_feedbackdashboard_pdf_set_text($pdf, '#586878');
 
     $pdf->SetX(12);
-
     $pdf->Cell(
         210,
         4.7,
@@ -880,7 +930,6 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     );
 
     $pdf->SetX(12);
-
     $pdf->Cell(
         210,
         4.7,
@@ -897,78 +946,48 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
      * NOME | NOTA | RESPOSTA
      * -------------------------------------------------------------
      */
-
     $x = 12.0;
     $y = 40.0;
 
-    /*
-     * Name receives enough room for full names.
-     * Score remains compact.
-     * Response receives most of the page.
-     */
     $namew = 66.0;
     $scorew = 30.0;
-
-    $responsew =
-        $pdf->getPageWidth()
-        - 24
-        - $namew
-        - $scorew;
+    $responsew = $pdf->getPageWidth() - 24 - $namew - $scorew;
 
     $headerh = 12.0;
 
     /*
      * -------------------------------------------------------------
-     * Colours derived FROM THE MOODLE THEME.
+     * Colours derived from the Moodle/AVA theme.
      * -------------------------------------------------------------
      */
 
     // Very light version of the AVA colour.
-    $headerfill =
-        local_feedbackdashboard_pdf_mix_color(
-            $primary,
-            '#FFFFFF',
-            0.91
-        );
+    $headerfill = local_feedbackdashboard_pdf_mix_color(
+        $primary,
+        '#FFFFFF',
+        0.91
+    );
 
-    // Light border derived from the AVA colour.
-    $tableborder =
-        local_feedbackdashboard_pdf_mix_color(
-            $primary,
-            '#FFFFFF',
-            0.55
-        );
+    // Border derived from the AVA colour.
+    $tableborder = local_feedbackdashboard_pdf_mix_color(
+        $primary,
+        '#FFFFFF',
+        0.55
+    );
 
-    // Zebra row background derived from the AVA colour.
-    $alternaterow =
-        local_feedbackdashboard_pdf_mix_color(
-            $primary,
-            '#FFFFFF',
-            0.965
-        );
+    // Alternate-row background derived from the AVA colour.
+    $alternaterow = local_feedbackdashboard_pdf_mix_color(
+        $primary,
+        '#FFFFFF',
+        0.965
+    );
 
     /*
      * -------------------------------------------------------------
-     * Header background.
-     * -------------------------------------------------------------
-     */
-
-    local_feedbackdashboard_pdf_set_fill(
-        $pdf,
-        $headerfill
-    );
-
-    local_feedbackdashboard_pdf_set_draw(
-        $pdf,
-        $tableborder
-    );
-
-    $pdf->SetLineWidth(0.30);
-
-    /*
-     * NOME.
+     * Table header.
      *
-     * Notice that the TEXT uses $primary.
+     * The labels use the actual primary AVA colour.
+     * -------------------------------------------------------------
      */
     local_feedbackdashboard_pdf_draw_table_cell(
         $pdf,
@@ -985,9 +1004,6 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
         8.5
     );
 
-    /*
-     * NOTA.
-     */
     local_feedbackdashboard_pdf_draw_table_cell(
         $pdf,
         $x + $namew,
@@ -1003,9 +1019,6 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
         8.5
     );
 
-    /*
-     * RESPOSTA.
-     */
     local_feedbackdashboard_pdf_draw_table_cell(
         $pdf,
         $x + $namew + $scorew,
@@ -1022,16 +1035,9 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     );
 
     /*
-     * Strong theme-coloured line below the header.
-     *
-     * This visually connects the table with the coloured
-     * institutional stripes used throughout the PDF.
+     * Strong AVA-coloured line under the table header.
      */
-    local_feedbackdashboard_pdf_set_draw(
-        $pdf,
-        $primary
-    );
-
+    local_feedbackdashboard_pdf_set_draw($pdf, $primary);
     $pdf->SetLineWidth(0.8);
 
     $pdf->Line(
@@ -1041,22 +1047,14 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
         $y + $headerh
     );
 
-    /*
-     * Restore normal line width for the data rows.
-     */
     $pdf->SetLineWidth(0.25);
 
     return [
         'x' => $x,
         'y' => $y + $headerh,
-
         'namew' => $namew,
         'scorew' => $scorew,
         'commentw' => $responsew,
-
-        /*
-         * Pass theme-derived colours to the row renderer.
-         */
         'bordercolor' => $tableborder,
         'alternaterow' => $alternaterow,
         'primary' => $primary,
@@ -1516,20 +1514,22 @@ if (empty($completions)) {
             );
         }
 
+        /*
+         * -------------------------------------------------------------
+         * Table row visual style.
+         *
+         * All structural colours are derived from the AVA theme.
+         * -------------------------------------------------------------
+         */
         $rowfill = ($rowindex % 2 === 0)
-            ? '#F7FAFC'
+            ? $table['alternaterow']
             : '#FFFFFF';
 
-        $tableborder = $table['bordercolor'] ?? '#667788';
+        $tableborder = $table['bordercolor'];
 
         /*
-         * Draw every cell explicitly using Rect().
-         *
-         * This guarantees that vertical and horizontal borders remain
-         * visible regardless of PDF viewer rendering differences.
+         * NOME
          */
-
-        // NOME.
         local_feedbackdashboard_pdf_draw_table_cell(
             $pdf,
             $table['x'],
@@ -1542,24 +1542,15 @@ if (empty($completions)) {
             '#263746',
             'L',
             false,
-            7.5
+            7.6
         );
 
-        // NOTA.
-        $scorefill = $rowfill;
-
-        if (is_numeric($scorevalue)) {
-            $scoreint = (int) $scorevalue;
-
-            if ($scoreint >= 9) {
-                $scorefill = '#DDF2EC';
-            } else if ($scoreint >= 7) {
-                $scorefill = '#FFF3CD';
-            } else {
-                $scorefill = '#FCE3DE';
-            }
-        }
-
+        /*
+         * NOTA
+         *
+         * Uses the AVA primary colour for emphasis without introducing
+         * unrelated colours into the institutional table.
+         */
         local_feedbackdashboard_pdf_draw_table_cell(
             $pdf,
             $table['x'] + $table['namew'],
@@ -1567,15 +1558,17 @@ if (empty($completions)) {
             $table['scorew'],
             $rowheight,
             $scorevalue,
-            $scorefill,
+            $rowfill,
             $tableborder,
-            '#263746',
+            $table['primary'],
             'C',
             true,
-            7.7
+            8.0
         );
 
-        // RESPOSTA.
+        /*
+         * RESPOSTA
+         */
         local_feedbackdashboard_pdf_draw_table_cell(
             $pdf,
             $table['x'] + $table['namew'] + $table['scorew'],
@@ -1588,7 +1581,7 @@ if (empty($completions)) {
             '#263746',
             'L',
             false,
-            7.5
+            7.6
         );
 
         $table['y'] += $rowheight;
