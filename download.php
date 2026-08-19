@@ -377,21 +377,8 @@ function local_feedbackdashboard_pdf_is_nps_item(stdClass $item): bool {
     $scores = array_values(array_unique(array_map('intval', $scores)));
     sort($scores);
 
-    if (count($scores) < 9) {
-        return false;
-    }
-
-    if (!in_array(0, $scores, true) || !in_array(10, $scores, true)) {
-        return false;
-    }
-
-    foreach ($scores as $score) {
-        if ($score < 0 || $score > 10) {
-            return false;
-        }
-    }
-
-    return true;
+    // Standard NPS requires the complete single-choice scale from 0 to 10.
+    return $scores === range(0, 10);
 }
 
 /**
