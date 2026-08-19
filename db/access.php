@@ -1,32 +1,47 @@
 <?php
 // This file is part of Moodle - https://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle. If not, see <https://www.gnu.org/licenses/>.
+
+/**
+ * Capability definitions for Feedback Dashboard.
+ *
+ * @package    local_feedbackdashboard
+ * @copyright  2026 Marcus Vinícius Milan da Silva
+ * @license    https://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
 defined('MOODLE_INTERNAL') || die();
 
 $capabilities = [
-
-    'block/feedbackdashboard:addinstance' => [
-        'riskbitmask' => 0,
-        'captype' => 'write',
-        'contextlevel' => CONTEXT_BLOCK,
-
+    'local/feedbackdashboard:view' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
+        'contextlevel' => CONTEXT_MODULE,
         'archetypes' => [
-            'editingteacher' => CAP_ALLOW,
+            // Intentionally restricted to managers by default.
+            // Editing teachers can be granted this capability manually if required.
             'manager' => CAP_ALLOW,
         ],
-
-        'clonepermissionsfrom' =>
-            'moodle/site:manageblocks',
     ],
 
-    'block/feedbackdashboard:myaddinstance' => [
-        'riskbitmask' => 0,
-        'captype' => 'write',
+    'local/feedbackdashboard:viewall' => [
+        'riskbitmask' => RISK_PERSONAL,
+        'captype' => 'read',
         'contextlevel' => CONTEXT_SYSTEM,
-
-        'archetypes' => [],
-
-        'clonepermissionsfrom' =>
-            'moodle/my:manageblocks',
+        'archetypes' => [
+            'manager' => CAP_ALLOW,
+        ],
     ],
 ];

@@ -13,13 +13,11 @@ defined('MOODLE_INTERNAL') || die();
 
 $callbacks = [
     [
-        'hook' => \core\hook\output\before_standard_top_of_body_html_generation::class,
-
+        'hook' => \core\hook\output\before_standard_head_html_generation::class,
         'callback' => [
             \local_feedbackdashboard\local\hook_callbacks::class,
-            'add_analysis_dashboard_button',
+            'add_activity_header_action',
         ],
-
         'priority' => 500,
     ],
 ];
