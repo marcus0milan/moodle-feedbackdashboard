@@ -21,6 +21,9 @@ use local_feedbackdashboard\local\nps_service;
 
 $courseid = required_param('id', PARAM_INT);
 
+$search = optional_param('search', '', PARAM_TEXT);
+$search = trim($search);
+
 $course = get_course($courseid);
 
 require_login($course);
@@ -55,8 +58,8 @@ $params = [
 ];
 
 $where = [
-    'WHERE cm.deletioninprogress = 0
-  AND c.id = :courseid',
+    'cm.deletioninprogress = 0',
+    'c.id = :courseid',
 ];
 
 if ($search !== '') {
