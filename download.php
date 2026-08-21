@@ -235,8 +235,8 @@ function local_feedbackdashboard_pdf_draw_logo(pdf $pdf, ?string $logopath): voi
         return;
     }
 
-    $maxwidth = 42.0;
-    $maxheight = 13.0;
+    $maxwidth = 56.0;
+    $maxheight = 12.5;
     $scale = min($maxwidth / $imagesize[0], $maxheight / $imagesize[1]);
 
     $width = max(1.0, $imagesize[0] * $scale);
@@ -519,6 +519,181 @@ function local_feedbackdashboard_pdf_build_open_answers(
     }
 
     return empty($answers) ? '-' : implode(' | ', $answers);
+}
+
+/**
+ * Returns the visual style for one NPS score in the response table.
+ *
+ * @param int|null $score Decoded NPS score.
+ * @param string $fallbackfill Default row background.
+ * @param string $fallbacktext Default score text colour.
+ * @param string $fallbackborder Default table border colour.
+ * @return array
+ */
+function local_feedbackdashboard_pdf_get_score_style(
+    ?int $score,
+    string $fallbackfill,
+    string $fallbacktext,
+    string $fallbackborder
+): array {
+    if ($score === null) {
+        return [
+            'fill' => $fallbackfill,
+            'text' => $fallbacktext,
+            'border' => $fallbackborder,
+        ];
+    }
+
+    if ($score >= 9) {
+        return [
+            'fill' => '#E3F4E7',
+            'text' => '#176B31',
+            'border' => '#79B88A',
+        ];
+    }
+
+    if ($score >= 7) {
+        return [
+            'fill' => '#FFF4CC',
+            'text' => '#846200',
+            'border' => '#D5B33E',
+        ];
+    }
+
+    return [
+        'fill' => '#FDE5E5',
+        'text' => '#9C1F1F',
+        'border' => '#D87979',
+    ];
+}
+
+/**
+ * Builds and sorts the response rows for the PDF.
+ *
+ * Valid NPS scores are listed first from 10 down to 0. Responses without
+ * a valid score are kept at the end. Equal scores retain chronological order.
+ *
+ * @param array $completions Feedback completion records.
+ * @param stdClass|null $npsitem NPS item, when detected.
+ * @param array $textitems Open-text Feedback items.
+ * @param array $valuesbycompletion Values indexed by completion and item.
+ * @param bool $isanonymous Whether the Feedback is anonymous.
+ * @return array
+ */
+function local_feedbackdashboard_pdf_build_response_rows(
+    array $completions,
+    ?stdClass $npsitem,
+    array $textitems,
+    array $valuesbycompletion,
+    bool $isanonymous
+): array {
+    $rows = [];
+
+    foreach ($completions as $completion) {
+        $score = null;
+
+        if ($npsitem !== null) {
+            $rawscore = (string) ($valuesbycompletion[$completion->id][$npsitem->id] ?? '');
+            $score = local_feedbackdashboard_pdf_decode_nps_score($npsitem, $rawscore);
+        }
+
+        $rows[] = [
+            'completionid' => (int) $completion->id,
+            'timemodified' => (int) $completion->timemodified,
+            'name' => $isanonymous ? '' : fullname($completion),
+            'score' => $score,
+            'scorevalue' => $score === null ? '-' : (string) $score,
+            'comment' => local_feedbackdashboard_pdf_build_open_answers(
+                (int) $completion->id,
+                $textitems,
+                $valuesbycompletion
+            ),
+        ];
+    }
+
+    usort($rows, static function(array $left, array $right): int {
+        $leftvalid = $left['score'] !== null;
+        $rightvalid = $right['score'] !== null;
+
+        if ($leftvalid !== $rightvalid) {
+            return $leftvalid ? -1 : 1;
+        }
+
+        if ($leftvalid && $rightvalid && $left['score'] !== $right['score']) {
+            return $right['score'] <=> $left['score'];
+        }
+
+        if ($left['timemodified'] !== $right['timemodified']) {
+            return $left['timemodified'] <=> $right['timemodified'];
+        }
+
+        return $left['completionid'] <=> $right['completionid'];
+    });
+
+    return $rows;
+}
+
+/**
+ * Draws the compact colour legend used above the response table.
+ *
+ * @param pdf $pdf PDF object.
+ * @param float $x X position.
+ * @param float $y Y position.
+ * @param string $dark Main text colour.
+ * @return void
+ */
+function local_feedbackdashboard_pdf_draw_score_legend(
+    pdf $pdf,
+    float $x,
+    float $y,
+    string $dark
+): void {
+    $pdf->SetFont('helvetica', 'B', 6.8);
+    local_feedbackdashboard_pdf_set_text($pdf, '#5B6875');
+    $pdf->SetXY($x, $y + 0.6);
+    $pdf->Cell(42, 5, 'Ordem: maior nota para menor', 0, 0, 'L');
+
+    $items = [
+        [
+            'label' => '9-10 Promotores',
+            'fill' => '#E3F4E7',
+            'text' => '#176B31',
+            'border' => '#79B88A',
+            'width' => 36.0,
+        ],
+        [
+            'label' => '7-8 Neutros',
+            'fill' => '#FFF4CC',
+            'text' => '#846200',
+            'border' => '#D5B33E',
+            'width' => 29.0,
+        ],
+        [
+            'label' => '0-6 Detratores',
+            'fill' => '#FDE5E5',
+            'text' => '#9C1F1F',
+            'border' => '#D87979',
+            'width' => 34.0,
+        ],
+    ];
+
+    $chipx = $x + 45.0;
+
+    foreach ($items as $item) {
+        local_feedbackdashboard_pdf_set_fill($pdf, $item['fill']);
+        local_feedbackdashboard_pdf_set_draw($pdf, $item['border']);
+        $pdf->SetLineWidth(0.22);
+        $pdf->RoundedRect($chipx, $y, $item['width'], 6.2, 1.0, '1111', 'DF');
+
+        $pdf->SetFont('helvetica', 'B', 6.2);
+        local_feedbackdashboard_pdf_set_text($pdf, $item['text']);
+        $pdf->SetXY($chipx + 1.0, $y + 0.55);
+        $pdf->Cell($item['width'] - 2.0, 4.8, $item['label'], 0, 0, 'C');
+
+        $chipx += $item['width'] + 3.0;
+    }
+
+    local_feedbackdashboard_pdf_set_text($pdf, $dark);
 }
 
 /**
@@ -926,6 +1101,14 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
         'L'
     );
 
+    // Visual legend and ordering information for the score column.
+    local_feedbackdashboard_pdf_draw_score_legend(
+        $pdf,
+        12.0,
+        35.0,
+        $dark
+    );
+
     /*
      * -------------------------------------------------------------
      * TABLE GEOMETRY
@@ -934,7 +1117,7 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
      * -------------------------------------------------------------
      */
     $x = 12.0;
-    $y = 40.0;
+    $y = 44.0;
 
     $namew = 66.0;
     $scorew = 30.0;
@@ -1185,6 +1368,14 @@ if (!empty($completions) && !empty($items)) {
 $npsmetrics = $npsitem !== null
     ? local_feedbackdashboard_pdf_calculate_nps($npsitem, $completions, $valuesbycompletion)
     : null;
+
+$responserows = local_feedbackdashboard_pdf_build_response_rows(
+    $completions,
+    $npsitem,
+    $textitems,
+    $valuesbycompletion,
+    $isanonymous
+);
 
 /*
  * -------------------------------------------------------------------------
@@ -1442,38 +1633,25 @@ $table = local_feedbackdashboard_pdf_draw_response_page_header(
     false
 );
 
-if (empty($completions)) {
+if (empty($responserows)) {
     $pdf->SetFont('helvetica', '', 10);
     local_feedbackdashboard_pdf_set_text($pdf, '#586878');
-    $pdf->SetXY(12, 62);
+    $pdf->SetXY(12, 64);
     $pdf->Cell(273, 8, 'Não há respostas para os filtros atuais.', 0, 1, 'C');
 } else {
     $rowindex = 0;
     $bottomlimit = $pdf->getPageHeight() - 13;
 
-    foreach ($completions as $completion) {
+    foreach ($responserows as $responserow) {
         $rowindex++;
 
         $name = $isanonymous
             ? 'Resposta ' . $rowindex
-            : fullname($completion);
+            : $responserow['name'];
 
-        $scorevalue = '-';
-
-        if ($npsitem !== null) {
-            $rawscore = (string) ($valuesbycompletion[$completion->id][$npsitem->id] ?? '');
-            $decodedscore = local_feedbackdashboard_pdf_decode_nps_score($npsitem, $rawscore);
-
-            if ($decodedscore !== null) {
-                $scorevalue = (string) $decodedscore;
-            }
-        }
-
-        $commentvalue = local_feedbackdashboard_pdf_build_open_answers(
-            (int) $completion->id,
-            $textitems,
-            $valuesbycompletion
-        );
+        $score = $responserow['score'];
+        $scorevalue = $responserow['scorevalue'];
+        $commentvalue = $responserow['comment'];
 
         $pdf->SetFont('helvetica', '', 7.3);
 
@@ -1504,8 +1682,6 @@ if (empty($completions)) {
         /*
          * -------------------------------------------------------------
          * Table row visual style.
-         *
-         * All structural colours are derived from the AVA theme.
          * -------------------------------------------------------------
          */
         $rowfill = ($rowindex % 2 === 0)
@@ -1513,6 +1689,12 @@ if (empty($completions)) {
             : '#FFFFFF';
 
         $tableborder = $table['bordercolor'];
+        $scorestyle = local_feedbackdashboard_pdf_get_score_style(
+            $score,
+            $rowfill,
+            $table['primary'],
+            $tableborder
+        );
 
         /*
          * NOME
@@ -1535,8 +1717,7 @@ if (empty($completions)) {
         /*
          * NOTA
          *
-         * Uses the AVA primary colour for emphasis without introducing
-         * unrelated colours into the institutional table.
+         * 9-10: verde | 7-8: amarelo | 0-6: vermelho.
          */
         local_feedbackdashboard_pdf_draw_table_cell(
             $pdf,
@@ -1545,12 +1726,12 @@ if (empty($completions)) {
             $table['scorew'],
             $rowheight,
             $scorevalue,
-            $rowfill,
-            $tableborder,
-            $table['primary'],
+            $scorestyle['fill'],
+            $scorestyle['border'],
+            $scorestyle['text'],
             'C',
             true,
-            8.0
+            9.2
         );
 
         /*
