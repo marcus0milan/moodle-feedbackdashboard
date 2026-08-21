@@ -122,7 +122,7 @@ foreach ($records as $record) {
 
     if (!$summary['hasnps']) {
     continue;
-}
+    }
 
     $totalsurveys++;
     $totalresponses += $summary['totalresponses'];
@@ -131,10 +131,6 @@ foreach ($records as $record) {
     $totalpassives += $summary['passives'];
     $totaldetractors += $summary['detractors'];
     $surveyswithnps++;
-
-    if ($summary['hasnps']) {
-        $surveyswithnps++;
-    }
 
     $dashboardurl = new moodle_url('/local/feedbackdashboard/index.php', [
         'id' => $record->cmid,
@@ -152,7 +148,7 @@ foreach ($records as $record) {
         ['class' => 'fw-semibold']
     );
 
-    if ($summary['hasnps'] && $summary['validresponses'] > 0) {
+    if ($summary['validresponses'] > 0) {
         $npsvalue = format_float($summary['nps'], 0);
         $npsclass = $summary['nps'] >= 50
             ? 'feedbackdashboard-admin-badge-good'
