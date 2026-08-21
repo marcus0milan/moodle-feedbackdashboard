@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.1.4-beta - 2026-08-19
+
+- Mantém acesso completo do arquétipo **Gerente** a todas as funções próprias do plugin.
+- Organiza as notas e comentários do PDF em ordem decrescente de nota.
+- Mantém respostas sem nota válida ao final da tabela.
+- Destaca notas 9–10 em verde, 7–8 em amarelo e 0–6 em vermelho.
+- Adiciona uma legenda visual de classificação no PDF.
+- Substitui o logotipo de teste pela identidade visual **COLAB-ON** fornecida.
+- Aumenta discretamente a área do logotipo no cabeçalho do PDF.
+- Não altera cálculo NPS, dados armazenados, dashboard web ou compatibilidade com Moodle 4.4 e 4.5.
+
 ## 1.1.3-beta - 2026-08-19
 
 - Remove a tentativa de inserir o acesso no menu **Mais**, que não é exibida de forma consistente por alguns temas no Moodle 4.4.
