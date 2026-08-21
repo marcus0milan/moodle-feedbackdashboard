@@ -54,7 +54,8 @@ $params = [
 ];
 
 $where = [
-    'cm.deletioninprogress = 0',
+    'WHERE cm.deletioninprogress = 0
+  AND c.id = :courseid',
 ];
 
 if ($search !== '') {
