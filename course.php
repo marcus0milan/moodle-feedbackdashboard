@@ -204,7 +204,7 @@ foreach ($records as $record) {
     ];
 }
 
-$globalnps = $totalvalidresponses > 0
+$coursenps = $totalvalidresponses > 0
     ? (($totalpromoters - $totaldetractors) / $totalvalidresponses) * 100
     : null;
 
@@ -286,7 +286,6 @@ if (empty($rows)) {
     $table = new html_table();
     $table->attributes = ['class' => 'generaltable feedbackdashboard-admin-table'];
     $table->head = [
-        get_string('course', 'local_feedbackdashboard'),
         get_string('feedback', 'local_feedbackdashboard'),
         get_string('responses', 'local_feedbackdashboard'),
         get_string('validnpsresponses', 'local_feedbackdashboard'),
