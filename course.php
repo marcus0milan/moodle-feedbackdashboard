@@ -63,11 +63,13 @@ $where = [
 ];
 
 if ($search !== '') {
-    $params['searchcourse'] = '%' . $DB->sql_like_escape($search) . '%';
     $params['searchfeedback'] = '%' . $DB->sql_like_escape($search) . '%';
 
-    $where[] = '(' . $DB->sql_like('c.fullname', ':searchcourse', false)
-        . ' OR ' . $DB->sql_like('f.name', ':searchfeedback', false) . ')';
+    $where[] = $DB->sql_like(
+        'f.name',
+        ':searchfeedback',
+        false
+    );
 }
 
 $sql = "SELECT
@@ -219,7 +221,7 @@ echo html_writer::tag(
     ['class' => 'text-muted mb-4']
 );
 
-// Search form.
+// Search form (Pesquisar)
 echo html_writer::start_tag('form', [
     'method' => 'get',
     'action' => (new moodle_url('/local/feedbackdashboard/course.php'))->out(false),
@@ -230,9 +232,12 @@ echo html_writer::tag('label', get_string('searchfeedbacks', 'local_feedbackdash
     'class' => 'visually-hidden',
 ]);
 echo html_writer::empty_tag('input', [
-    'type' => 'hidden',
-    'name' => 'id',
-    'value' => $courseid,
+    'type' => 'search',
+    'id' => 'feedbackdashboard-admin-search',
+    'name' => 'search',
+    'value' => $search,
+    'class' => 'form-control',
+    'placeholder' => get_string('searchfeedbacks', 'local_feedbackdashboard'),
 ]);
 echo html_writer::tag('button', get_string('search', 'local_feedbackdashboard'), [
     'type' => 'submit',
@@ -242,7 +247,7 @@ if ($search !== '') {
     echo html_writer::link(
         new moodle_url('/local/feedbackdashboard/course.php', [
     'id' => $courseid,
-])
+]),
         get_string('clear', 'local_feedbackdashboard'),
         ['class' => 'btn btn-secondary']
     );
@@ -266,8 +271,8 @@ $kpis = [
         'value' => $surveyswithnps,
     ],
     [
-        'label' => get_string('globalnps', 'local_feedbackdashboard'),
-        'value' => $globalnps === null ? '—' : format_float($globalnps, 0),
+        'label' => get_string('coursenps', 'local_feedbackdashboard'),
+        'value' => $coursenps === null ? '—' : format_float($coursenps, 0),
     ],
 ];
 

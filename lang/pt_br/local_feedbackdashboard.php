@@ -46,3 +46,4 @@ $string['surveyswithnps'] = 'Pesquisas com NPS';
 $string['privacy:metadata'] = 'O plugin Dashboard NPS não armazena dados pessoais. Ele apenas lê dados já mantidos pela atividade Pesquisa do Moodle e os exibe para usuários autorizados.';
 $string['feedbackdashboard:view'] = 'Visualizar o dashboard NPS de uma atividade Pesquisa';
 $string['feedbackdashboard:viewall'] = 'Visualizar o dashboard geral de NPS do site';
+$string['coursenps'] = 'NPS do curso';
