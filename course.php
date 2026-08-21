@@ -120,12 +120,17 @@ foreach ($records as $record) {
 
     $summary = nps_service::get_summary($feedback);
 
+    if (!$summary['hasnps']) {
+    continue;
+}
+
     $totalsurveys++;
     $totalresponses += $summary['totalresponses'];
     $totalvalidresponses += $summary['validresponses'];
     $totalpromoters += $summary['promoters'];
     $totalpassives += $summary['passives'];
     $totaldetractors += $summary['detractors'];
+    $surveyswithnps++;
 
     if ($summary['hasnps']) {
         $surveyswithnps++;
