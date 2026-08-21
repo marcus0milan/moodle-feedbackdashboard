@@ -46,3 +46,4 @@ $string['surveyswithnps'] = 'Activities with NPS';
 $string['privacy:metadata'] = 'The Feedback Dashboard plugin does not store personal data. It reads data already held by Moodle Feedback and displays it to authorised users.';
 $string['feedbackdashboard:view'] = 'View an NPS dashboard for a Feedback activity';
 $string['feedbackdashboard:viewall'] = 'View the site-wide NPS dashboard';
+$string['coursenps'] = 'Course NPS';
