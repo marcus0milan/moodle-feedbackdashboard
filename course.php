@@ -51,6 +51,7 @@ $PAGE->set_heading(
 
 $params = [
     'modname' => 'feedback',
+    'courseid' => $courseid,
 ];
 
 $where = [
