@@ -245,7 +245,9 @@ echo html_writer::tag('button', get_string('search', 'local_feedbackdashboard'),
 ]);
 if ($search !== '') {
     echo html_writer::link(
-        new moodle_url('/local/feedbackdashboard/admin.php'),
+        new moodle_url('/local/feedbackdashboard/course.php', [
+    'id' => $courseid,
+])
         get_string('clear', 'local_feedbackdashboard'),
         ['class' => 'btn btn-secondary']
     );
