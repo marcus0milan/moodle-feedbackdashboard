@@ -47,3 +47,6 @@ $string['privacy:metadata'] = 'O plugin Dashboard NPS não armazena dados pessoa
 $string['feedbackdashboard:view'] = 'Visualizar o dashboard NPS de uma atividade Pesquisa';
 $string['feedbackdashboard:viewall'] = 'Visualizar o dashboard geral de NPS do site';
 $string['coursenps'] = 'NPS do curso';
+$string['searchcourses'] = 'Pesquisar cursos';
+$string['courseswithnps'] = 'Cursos com NPS';
+$string['nocourseswithnps'] = 'Nenhum curso com pesquisas NPS foi encontrado.';

@@ -47,3 +47,6 @@ $string['privacy:metadata'] = 'The Feedback Dashboard plugin does not store pers
 $string['feedbackdashboard:view'] = 'View an NPS dashboard for a Feedback activity';
 $string['feedbackdashboard:viewall'] = 'View the site-wide NPS dashboard';
 $string['coursenps'] = 'Course NPS';
+$string['searchcourses'] = 'Search courses';
+$string['courseswithnps'] = 'Courses with NPS';
+$string['nocourseswithnps'] = 'No courses with NPS surveys were found.';
