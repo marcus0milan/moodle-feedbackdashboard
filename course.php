@@ -139,12 +139,6 @@ foreach ($records as $record) {
         'id' => $record->cmid,
     ]);
 
-    $courselink = html_writer::link(
-        new moodle_url('/course/view.php', ['id' => $record->courseid]),
-        format_string($record->coursename),
-        ['class' => 'fw-semibold']
-    );
-
     $feedbacklink = html_writer::link(
         $dashboardurl,
         format_string($record->feedbackname),
@@ -192,7 +186,6 @@ foreach ($records as $record) {
     $actions .= html_writer::end_div();
 
     $rows[] = [
-        $courselink,
         $feedbacklink,
         (string) $summary['totalresponses'],
         (string) $summary['validresponses'],
