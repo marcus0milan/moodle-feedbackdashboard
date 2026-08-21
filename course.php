@@ -227,7 +227,7 @@ echo html_writer::tag(
 // Search form.
 echo html_writer::start_tag('form', [
     'method' => 'get',
-    'action' => (new moodle_url('/local/feedbackdashboard/admin.php'))->out(false),
+    'action' => (new moodle_url('/local/feedbackdashboard/course.php'))->out(false),
     'class' => 'feedbackdashboard-admin-search mb-4',
 ]);
 echo html_writer::tag('label', get_string('searchfeedbacks', 'local_feedbackdashboard'), [
@@ -235,12 +235,9 @@ echo html_writer::tag('label', get_string('searchfeedbacks', 'local_feedbackdash
     'class' => 'visually-hidden',
 ]);
 echo html_writer::empty_tag('input', [
-    'type' => 'search',
-    'id' => 'feedbackdashboard-admin-search',
-    'name' => 'search',
-    'value' => $search,
-    'class' => 'form-control',
-    'placeholder' => get_string('searchfeedbacks', 'local_feedbackdashboard'),
+    'type' => 'hidden',
+    'name' => 'id',
+    'value' => $courseid,
 ]);
 echo html_writer::tag('button', get_string('search', 'local_feedbackdashboard'), [
     'type' => 'submit',
