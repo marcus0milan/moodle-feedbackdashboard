@@ -222,7 +222,7 @@ echo $OUTPUT->heading(
 );
 echo html_writer::tag(
     'p',
-    get_string('admindashboarddescription', 'local_feedbackdashboard'),
+    'Visão geral das pesquisas NPS deste curso.',
     ['class' => 'text-muted mb-4']
 );
 
