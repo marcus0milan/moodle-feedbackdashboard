@@ -217,7 +217,9 @@ $globalnps = $totalvalidresponses > 0
 
 echo $OUTPUT->header();
 
-echo $OUTPUT->heading(get_string('admindashboardheading', 'local_feedbackdashboard'));
+echo $OUTPUT->heading(
+    'Dashboard NPS - ' . format_string($course->fullname)
+);
 echo html_writer::tag(
     'p',
     get_string('admindashboarddescription', 'local_feedbackdashboard'),
