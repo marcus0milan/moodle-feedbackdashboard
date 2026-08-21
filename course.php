@@ -237,6 +237,12 @@ echo html_writer::tag('label', get_string('searchfeedbacks', 'local_feedbackdash
     'class' => 'visually-hidden',
 ]);
 echo html_writer::empty_tag('input', [
+    'type' => 'hidden',
+    'name' => 'id',
+    'value' => $courseid,
+]);
+
+echo html_writer::empty_tag('input', [
     'type' => 'search',
     'id' => 'feedbackdashboard-admin-search',
     'name' => 'search',
