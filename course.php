@@ -157,14 +157,9 @@ foreach ($records as $record) {
                 : 'feedbackdashboard-admin-badge-bad');
 
         $npsdisplay = html_writer::span($npsvalue, 'feedbackdashboard-admin-badge ' . $npsclass);
-    } else if ($summary['hasnps']) {
-        $npsdisplay = html_writer::span('—', 'text-muted');
     } else {
-        $npsdisplay = html_writer::span(
-            get_string('nonpsquestion', 'local_feedbackdashboard'),
-            'text-muted small'
-        );
-    }
+    $npsdisplay = html_writer::span('—', 'text-muted');
+    } 
 
     $lastresponse = $summary['lastresponse']
         ? userdate($summary['lastresponse'], get_string('strftimedatetimeshort', 'langconfig'))
