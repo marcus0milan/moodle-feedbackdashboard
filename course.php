@@ -274,7 +274,7 @@ $kpis = [
     ],
     [
         'label' => get_string('coursenps', 'local_feedbackdashboard'),
-        'value' => $coursenps === null ? '—' : format_float($coursenps, 0),
+        'value' => $coursenps === null ? '—' : format_float($coursenps, 0) . '%',
     ],
 ];
 
