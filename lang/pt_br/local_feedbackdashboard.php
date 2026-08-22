@@ -18,6 +18,7 @@ defined('MOODLE_INTERNAL') || die();
 
 $string['pluginname'] = 'Dashboard NPS';
 $string['opendashboard'] = 'Abrir Dashboard NPS';
+$string['opencourse'] = 'Abrir curso';
 $string['admindashboard'] = 'Dashboard NPS';
 $string['admindashboardheading'] = 'Painel de NPS por Curso';
 $string['admindashboarddescription'] = 'Selecione um curso para visualizar todas as atividades de Feedback de Satisfação ou gere diretamente o relatório do indicador NPS do curso.';

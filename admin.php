@@ -292,7 +292,7 @@ foreach ($courses as $coursedata) {
     $actions .= html_writer::link(
         $courseurl,
         get_string(
-            'opendashboard',
+            'opencourse',
             'local_feedbackdashboard'
         ),
         [
