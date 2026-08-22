@@ -15,6 +15,7 @@
  */
 
 require_once(__DIR__ . '/../../config.php');
+require_once($CFG->libdir . '/adminlib.php');
 require_once($CFG->dirroot . '/mod/feedback/lib.php');
 
 use local_feedbackdashboard\local\nps_service;
