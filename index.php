@@ -11,6 +11,7 @@
 
 require_once(__DIR__ . '/../../config.php');
 require_once($CFG->dirroot . '/mod/feedback/lib.php');
+require_once($CFG->libdir . '/grouplib.php');
 
 /**
  * Converts Feedback content to compact plain text.
@@ -413,6 +414,7 @@ function local_feedbackdashboard_build_open_answers_html(
  */
 
 $id = required_param('id', PARAM_INT);
+$selectedgroupid = optional_param('groupid', 0, PARAM_INT);
 $selecteduserids = optional_param_array('users', [], PARAM_INT);
 $selecteduserids = array_values(array_unique(array_map('intval', $selecteduserids)));
 
@@ -425,6 +427,48 @@ require_capability('mod/feedback:viewreports', $context);
 
 $feedback = $DB->get_record('feedback', ['id' => $cm->instance], '*', MUST_EXIST);
 $isanonymous = ((int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES);
+
+/*
+ * -------------------------------------------------------------------------
+ * Groups available to the current user.
+ *
+ * When the activity does not enforce groups, users with report access may
+ * filter by any course group. When group access is restricted by Moodle,
+ * only groups the current user is allowed to access are exposed.
+ * -------------------------------------------------------------------------
+ */
+
+$groupmode = groups_get_activity_groupmode($cm);
+$accessallgroups = ($groupmode == NOGROUPS)
+    || has_capability('moodle/site:accessallgroups', $context);
+
+$availablegroups = [];
+
+if (!$isanonymous) {
+    if ($accessallgroups) {
+        $availablegroups = groups_get_all_groups(
+            $course->id,
+            0,
+            $cm->groupingid,
+            'g.id, g.name'
+        );
+    } else {
+        $availablegroups = groups_get_activity_allowed_groups($cm);
+    }
+
+    if (!is_array($availablegroups)) {
+        $availablegroups = [];
+    }
+
+    $availablegroupids = array_map('intval', array_keys($availablegroups));
+
+    // Never accept a group outside the set the current user is allowed to see.
+    if ($selectedgroupid > 0 && !in_array($selectedgroupid, $availablegroupids, true)) {
+        $selectedgroupid = 0;
+    }
+} else {
+    $selectedgroupid = 0;
+}
 
 /*
  * -------------------------------------------------------------------------
@@ -477,6 +521,45 @@ $npsitem = local_feedbackdashboard_find_nps_item($items);
 $responders = [];
 
 if (!$isanonymous) {
+    $responderparams = [
+        'feedbackid' => $feedback->id,
+        'identifiedresponse' => FEEDBACK_ANONYMOUS_NO,
+    ];
+
+    $respondergroupjoin = '';
+    $respondergroupwhere = '';
+
+    /*
+     * A selected group always restricts the responder list to members
+     * of that group.
+     */
+    if ($selectedgroupid > 0) {
+        $respondergroupjoin = ' JOIN {groups_members} gm ON gm.userid = fbc.userid';
+        $respondergroupwhere = ' AND gm.groupid = :selectedgroupid';
+        $responderparams['selectedgroupid'] = $selectedgroupid;
+
+    /*
+     * In restricted group mode, "Todos os grupos" means all groups the
+     * current user is actually allowed to access, never every course group.
+     */
+    } else if (!$accessallgroups) {
+        $allowedgroupids = array_map('intval', array_keys($availablegroups));
+
+        if (empty($allowedgroupids)) {
+            $respondergroupwhere = ' AND 1 = 0';
+        } else {
+            [$allowedgroupsql, $allowedgroupparams] = $DB->get_in_or_equal(
+                $allowedgroupids,
+                SQL_PARAMS_NAMED,
+                'dashboardgroup'
+            );
+
+            $respondergroupjoin = ' JOIN {groups_members} gm ON gm.userid = fbc.userid';
+            $respondergroupwhere = " AND gm.groupid {$allowedgroupsql}";
+            $responderparams += $allowedgroupparams;
+        }
+    }
+
     $responders = $DB->get_records_sql(
         "SELECT DISTINCT
                 u.id,
@@ -489,21 +572,46 @@ if (!$isanonymous) {
                 u.email
            FROM {feedback_completed} fbc
            JOIN {user} u ON u.id = fbc.userid
+           {$respondergroupjoin}
           WHERE fbc.feedback = :feedbackid
             AND fbc.userid > 0
             AND fbc.anonymous_response = :identifiedresponse
             AND u.deleted = 0
+            {$respondergroupwhere}
        ORDER BY u.firstname, u.lastname, u.id",
-        [
-            'feedbackid' => $feedback->id,
-            'identifiedresponse' => FEEDBACK_ANONYMOUS_NO,
-        ]
+        $responderparams
     );
 
     $validresponderids = array_map('intval', array_keys($responders));
     $selecteduserids = array_values(array_intersect($selecteduserids, $validresponderids));
 } else {
     $selecteduserids = [];
+}
+
+/*
+ * Determines whether the completion query must be restricted by users.
+ *
+ * This is true for a selected group and also when Moodle group permissions
+ * restrict the current user to a subset of groups.
+ */
+$mustfilterbyusers = !$isanonymous
+    && (
+        !empty($selecteduserids)
+        || $selectedgroupid > 0
+        || !$accessallgroups
+    );
+
+$effectiveuserids = [];
+
+if ($mustfilterbyusers) {
+    $effectiveuserids = !empty($selecteduserids)
+        ? $selecteduserids
+        : array_map('intval', array_keys($responders));
+
+    // Force an empty result rather than accidentally falling back to all users.
+    if (empty($effectiveuserids)) {
+        $effectiveuserids = [0];
+    }
 }
 
 /*
@@ -535,9 +643,9 @@ $completionssql = "
       AND fbc.anonymous_response = :responsemode
 ";
 
-if (!$isanonymous && !empty($selecteduserids)) {
+if ($mustfilterbyusers) {
     [$usersql, $userparams] = $DB->get_in_or_equal(
-        $selecteduserids,
+        $effectiveuserids,
         SQL_PARAMS_NAMED,
         'dashboarduser'
     );
@@ -602,6 +710,7 @@ $filterjavascript = <<<'JS'
     }
 
     const allCheckbox = document.getElementById('feedbackdashboard-filter-all');
+    const groupSelect = document.getElementById('feedbackdashboard-group-filter');
     const userCheckboxes = Array.from(
         form.querySelectorAll('.feedbackdashboard-user-checkbox')
     );
@@ -619,6 +728,25 @@ $filterjavascript = <<<'JS'
         }, 700);
     };
 
+    /*
+     * Changing group refreshes the participant list immediately.
+     * Previously checked students are cleared so selections from another
+     * group are never carried into the new group.
+     */
+    if (groupSelect) {
+        groupSelect.addEventListener('change', function() {
+            userCheckboxes.forEach(function(checkbox) {
+                checkbox.checked = false;
+            });
+
+            if (allCheckbox) {
+                allCheckbox.checked = true;
+            }
+
+            form.submit();
+        });
+    }
+
     if (allCheckbox) {
         allCheckbox.addEventListener('change', function() {
             if (allCheckbox.checked) {
@@ -628,6 +756,7 @@ $filterjavascript = <<<'JS'
             } else if (!userCheckboxes.some(function(checkbox) { return checkbox.checked; })) {
                 allCheckbox.checked = true;
             }
+
             scheduleSubmit();
         });
     }
@@ -639,6 +768,7 @@ $filterjavascript = <<<'JS'
                     return current.checked;
                 });
             }
+
             scheduleSubmit();
         });
     });
@@ -677,6 +807,11 @@ $dashboardcss = '
 .feedbackdashboard-card-value {font-size:1.9rem; line-height:1.15; font-weight:700; color:' . $dark . '; margin:.2rem 0;}
 .feedbackdashboard-card-detail {color:#637083; font-size:.78rem;}
 .feedbackdashboard-chartbox {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; padding:1rem; height:100%;}
+.feedbackdashboard-filter-tools {background:' . $light . '; border:1px solid ' . $border . '; border-radius:.5rem; padding:1rem; height:100%;}
+.feedbackdashboard-filter-list {background:#fff; border:1px solid ' . $border . '; border-radius:.5rem; padding:1rem; height:100%;}
+.feedbackdashboard-filter-label {font-weight:600; color:' . $dark . '; margin-bottom:.35rem;}
+.feedbackdashboard-filter-help {font-size:.78rem; color:#637083; margin-top:.35rem;}
+.feedbackdashboard-filter-group-status {display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .55rem; border:1px solid ' . $border . '; border-radius:999px; background:' . $light . '; color:' . $dark . '; font-size:.78rem; font-weight:600;}
 .feedbackdashboard-nps-row {display:grid; grid-template-columns:90px 1fr 92px; align-items:center; gap:.65rem; margin:.8rem 0;}
 .feedbackdashboard-nps-label {font-size:.82rem; font-weight:600; color:#536271;}
 .feedbackdashboard-nps-track {height:24px; background:#eef2f6; border-radius:3px; overflow:hidden;}
@@ -695,8 +830,17 @@ echo html_writer::tag('div', 'Feedback de Pesquisa de Satisfação do aluno', ['
 echo html_writer::end_div();
 
 $pdfparams = ['id' => $cm->id];
-if (!$isanonymous && !empty($selecteduserids)) {
-    $pdfparams['userids'] = implode(',', $selecteduserids);
+
+if (!$isanonymous && $mustfilterbyusers) {
+    $pdfuserids = !empty($selecteduserids)
+        ? $selecteduserids
+        : array_map('intval', array_keys($responders));
+
+    // download.php treats userids=0 as a valid empty filter, preventing
+    // a zero-response group from accidentally exporting every response.
+    $pdfparams['userids'] = empty($pdfuserids)
+        ? '0'
+        : implode(',', $pdfuserids);
 }
 
 $pdfurl = new moodle_url('/local/feedbackdashboard/download.php', $pdfparams);
@@ -708,68 +852,167 @@ echo html_writer::link($pdfurl, $pdfbuttoncontent, [
 ]);
 echo html_writer::end_div();
 
-/* Participant filter. */
+/* Participant and group filter. */
 if (!$isanonymous) {
     echo html_writer::start_div('card mb-4');
     echo html_writer::start_div('card-body');
+
     echo $OUTPUT->heading('Filtrar participantes', 3, 'h5 card-title');
+
     echo html_writer::tag(
         'p',
-        'Selecione um ou mais alunos. Os indicadores, gráficos, tabela e PDF serão recalculados com o mesmo filtro.',
+        'Filtre por grupo ou selecione alunos específicos. Os indicadores, gráficos, tabela e PDF serão recalculados com o mesmo filtro.',
         ['class' => 'text-muted mb-3']
     );
 
-    if (empty($responders)) {
-        echo $OUTPUT->notification('Ainda não há alunos identificados que responderam esta pesquisa.', 'info');
+    echo html_writer::start_tag('form', [
+        'id' => 'feedbackdashboard-filter-form',
+        'method' => 'get',
+        'action' => (new moodle_url('/local/feedbackdashboard/index.php'))->out(false),
+        'autocomplete' => 'off',
+    ]);
+
+    echo html_writer::empty_tag('input', [
+        'type' => 'hidden',
+        'name' => 'id',
+        'value' => $cm->id,
+    ]);
+
+    echo html_writer::start_div('row g-3 align-items-stretch');
+
+    /*
+     * -------------------------------------------------------------
+     * Left side: group and name filters.
+     * -------------------------------------------------------------
+     */
+    echo html_writer::start_div('col-12 col-lg-4');
+    echo html_writer::start_div('feedbackdashboard-filter-tools');
+
+    echo html_writer::tag(
+        'div',
+        'Filtros',
+        ['class' => 'fw-bold mb-3']
+    );
+
+    // Group dropdown.
+    echo html_writer::tag('label', 'Filtrar por grupo', [
+        'for' => 'feedbackdashboard-group-filter',
+        'class' => 'form-label feedbackdashboard-filter-label',
+    ]);
+
+    $groupoptions = [
+        0 => 'Todos os grupos',
+    ];
+
+    foreach ($availablegroups as $group) {
+        $groupoptions[(int) $group->id] = format_string(
+            $group->name,
+            true,
+            ['context' => $context]
+        );
+    }
+
+    $groupselectattributes = [
+        'id' => 'feedbackdashboard-group-filter',
+        'class' => 'form-select',
+    ];
+
+    if (empty($availablegroups)) {
+        $groupselectattributes['disabled'] = 'disabled';
+    }
+
+    echo html_writer::select(
+        $groupoptions,
+        'groupid',
+        $selectedgroupid,
+        false,
+        $groupselectattributes
+    );
+
+    if (empty($availablegroups)) {
+        echo html_writer::tag(
+            'div',
+            'Nenhum grupo está disponível para esta atividade.',
+            ['class' => 'feedbackdashboard-filter-help mb-3']
+        );
     } else {
-        echo html_writer::start_tag('form', [
-            'id' => 'feedbackdashboard-filter-form',
-            'method' => 'get',
-            'action' => (new moodle_url('/local/feedbackdashboard/index.php'))->out(false),
-            'autocomplete' => 'off',
-        ]);
-        echo html_writer::empty_tag('input', [
-            'type' => 'hidden',
-            'name' => 'id',
-            'value' => $cm->id,
+        echo html_writer::tag(
+            'div',
+            'Selecione um grupo para exibir somente os participantes desse grupo.',
+            ['class' => 'feedbackdashboard-filter-help mb-3']
+        );
+    }
+
+    // Student search.
+    echo html_writer::tag('label', 'Pesquisar aluno', [
+        'for' => 'feedbackdashboard-student-search',
+        'class' => 'form-label feedbackdashboard-filter-label mt-2',
+    ]);
+
+    echo html_writer::empty_tag('input', [
+        'type' => 'search',
+        'id' => 'feedbackdashboard-student-search',
+        'class' => 'form-control',
+        'placeholder' => 'Digite o nome do aluno...',
+    ]);
+
+    echo html_writer::tag(
+        'div',
+        'A busca por nome refina apenas a lista de participantes exibida ao lado.',
+        ['class' => 'feedbackdashboard-filter-help']
+    );
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+
+    /*
+     * -------------------------------------------------------------
+     * Right side: responders in the selected group.
+     * -------------------------------------------------------------
+     */
+    echo html_writer::start_div('col-12 col-lg-8');
+    echo html_writer::start_div('feedbackdashboard-filter-list');
+
+    echo html_writer::start_div('form-check border-bottom pb-2 mb-2');
+
+    $allattributes = [
+        'type' => 'checkbox',
+        'id' => 'feedbackdashboard-filter-all',
+        'class' => 'form-check-input',
+        'value' => '1',
+    ];
+
+    if (empty($selecteduserids)) {
+        $allattributes['checked'] = 'checked';
+    }
+
+    echo html_writer::empty_tag('input', $allattributes);
+
+    $alllabel = $selectedgroupid > 0
+        ? 'Todos os alunos do grupo'
+        : 'Todos os alunos';
+
+    echo html_writer::tag('label', $alllabel, [
+        'for' => 'feedbackdashboard-filter-all',
+        'class' => 'form-check-label fw-bold',
+    ]);
+
+    echo html_writer::end_div();
+
+    if (empty($responders)) {
+        $emptymessage = $selectedgroupid > 0
+            ? 'Nenhum participante deste grupo respondeu esta pesquisa.'
+            : 'Ainda não há alunos identificados que responderam esta pesquisa.';
+
+        echo html_writer::div(
+            s($emptymessage),
+            'text-muted py-3'
+        );
+    } else {
+        echo html_writer::start_div('overflow-auto', [
+            'style' => 'max-height:190px;',
         ]);
 
-        echo html_writer::start_div('row g-3');
-        echo html_writer::start_div('col-12 col-lg-4');
-        echo html_writer::tag('label', 'Pesquisar aluno', [
-            'for' => 'feedbackdashboard-student-search',
-            'class' => 'form-label',
-        ]);
-        echo html_writer::empty_tag('input', [
-            'type' => 'search',
-            'id' => 'feedbackdashboard-student-search',
-            'class' => 'form-control',
-            'placeholder' => 'Digite o nome do aluno...',
-        ]);
-        echo html_writer::end_div();
-
-        echo html_writer::start_div('col-12 col-lg-8');
-        echo html_writer::start_div('border rounded p-3');
-        echo html_writer::start_div('form-check border-bottom pb-2 mb-2');
-
-        $allattributes = [
-            'type' => 'checkbox',
-            'id' => 'feedbackdashboard-filter-all',
-            'class' => 'form-check-input',
-            'value' => '1',
-        ];
-        if (empty($selecteduserids)) {
-            $allattributes['checked'] = 'checked';
-        }
-
-        echo html_writer::empty_tag('input', $allattributes);
-        echo html_writer::tag('label', 'Todos os alunos', [
-            'for' => 'feedbackdashboard-filter-all',
-            'class' => 'form-check-label fw-bold',
-        ]);
-        echo html_writer::end_div();
-
-        echo html_writer::start_div('overflow-auto', ['style' => 'max-height:190px;']);
         foreach ($responders as $responder) {
             $responderid = (int) $responder->id;
             $respondername = fullname($responder);
@@ -787,44 +1030,98 @@ if (!$isanonymous) {
                 $checkboxattributes['checked'] = 'checked';
             }
 
-            echo html_writer::start_div('form-check py-1 feedbackdashboard-student-option', [
-                'data-student-name' => core_text::strtolower($respondername),
-            ]);
-            echo html_writer::empty_tag('input', $checkboxattributes);
-            echo html_writer::tag('label', s($respondername), [
-                'for' => $checkboxid,
-                'class' => 'form-check-label',
-            ]);
+            echo html_writer::start_div(
+                'form-check py-1 feedbackdashboard-student-option',
+                [
+                    'data-student-name' => core_text::strtolower($respondername),
+                ]
+            );
+
+            echo html_writer::empty_tag(
+                'input',
+                $checkboxattributes
+            );
+
+            echo html_writer::tag(
+                'label',
+                s($respondername),
+                [
+                    'for' => $checkboxid,
+                    'class' => 'form-check-label',
+                ]
+            );
+
             echo html_writer::end_div();
         }
-        echo html_writer::end_div();
-        echo html_writer::end_div();
-        echo html_writer::end_div();
-        echo html_writer::end_div();
 
-        echo html_writer::start_div('d-flex align-items-center flex-wrap gap-2 mt-3');
-        echo html_writer::tag('button', 'Aplicar filtro', [
+        echo html_writer::end_div();
+    }
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+
+    echo html_writer::end_div();
+
+    /*
+     * -------------------------------------------------------------
+     * Filter actions and current state.
+     * -------------------------------------------------------------
+     */
+    echo html_writer::start_div(
+        'd-flex align-items-center flex-wrap gap-2 mt-3'
+    );
+
+    echo html_writer::tag(
+        'button',
+        'Aplicar filtro',
+        [
             'type' => 'submit',
             'class' => 'btn btn-primary',
-        ]);
-        echo html_writer::link($pageurl, 'Limpar filtro', ['class' => 'btn btn-secondary']);
+        ]
+    );
 
-        $selectionmessage = empty($selecteduserids)
-            ? 'Exibindo todos os alunos.'
-            : (count($selecteduserids) === 1
-                ? '1 aluno selecionado.'
-                : count($selecteduserids) . ' alunos selecionados.');
+    echo html_writer::link(
+        $pageurl,
+        'Limpar filtro',
+        ['class' => 'btn btn-secondary']
+    );
 
-        echo html_writer::tag('span', $selectionmessage, ['class' => 'text-muted ms-2']);
-        echo html_writer::end_div();
-        echo html_writer::end_tag('form');
+    $statusparts = [];
+
+    if ($selectedgroupid > 0 && isset($availablegroups[$selectedgroupid])) {
+        $groupname = format_string(
+            $availablegroups[$selectedgroupid]->name,
+            true,
+            ['context' => $context]
+        );
+
+        $statusparts[] = 'Grupo: ' . $groupname;
+    } else {
+        $statusparts[] = 'Todos os grupos';
     }
+
+    if (empty($selecteduserids)) {
+        $statusparts[] = count($responders) . ' participante(s)';
+    } else if (count($selecteduserids) === 1) {
+        $statusparts[] = '1 aluno selecionado';
+    } else {
+        $statusparts[] = count($selecteduserids) . ' alunos selecionados';
+    }
+
+    echo html_writer::tag(
+        'span',
+        s(implode(' · ', $statusparts)),
+        ['class' => 'feedbackdashboard-filter-group-status ms-1']
+    );
+
+    echo html_writer::end_div();
+    echo html_writer::end_tag('form');
 
     echo html_writer::end_div();
     echo html_writer::end_div();
 } else {
     echo $OUTPUT->notification(
-        'Esta pesquisa é anônima. O NPS é calculado normalmente, porém o filtro por aluno permanece indisponível.',
+        'Esta pesquisa é anônima. O NPS é calculado normalmente, porém os filtros por aluno e grupo permanecem indisponíveis.',
         'warning'
     );
 }
