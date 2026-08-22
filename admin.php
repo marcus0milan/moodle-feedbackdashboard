@@ -496,7 +496,7 @@ $kpis = [
         ),
         'value' => $globalnps === null
             ? '—'
-            : format_float($globalnps, 0),
+            : format_float($globalnps, 0) . '%',
     ],
 ];
 
