@@ -281,26 +281,64 @@ foreach ($courses as $coursedata) {
         );
 
     /*
-     * Actions.
-     *
-     * Course PDF will be added later through download_course.php.
-     */
-    $actions = html_writer::start_div(
-        'd-flex flex-wrap gap-1'
+ * Actions.
+ */
+$courseurl = new moodle_url(
+    '/local/feedbackdashboard/course.php',
+    [
+        'id' => $coursedata['id'],
+    ]
+);
+
+$coursepdfurl = new moodle_url(
+    '/local/feedbackdashboard/download_course.php',
+    [
+        'id' => $coursedata['id'],
+    ]
+);
+
+$actions = html_writer::start_div(
+    'd-flex flex-wrap gap-1'
+);
+
+/*
+ * Abrir Dashboard do curso.
+ */
+$actions .= html_writer::link(
+    $courseurl,
+    get_string(
+        'opendashboard',
+        'local_feedbackdashboard'
+    ),
+    [
+        'class' => 'btn btn-sm btn-primary',
+    ]
+);
+
+/*
+ * Baixar relatório consolidado do curso.
+ */
+$pdfbuttoncontent =
+    $OUTPUT->pix_icon('t/download', '')
+    . ' '
+    . get_string(
+        'downloadcoursepdf',
+        'local_feedbackdashboard'
     );
 
-    $actions .= html_writer::link(
-        $courseurl,
-        get_string(
-            'opencourse',
+$actions .= html_writer::link(
+    $coursepdfurl,
+    $pdfbuttoncontent,
+    [
+        'class' => 'btn btn-sm btn-outline-primary',
+        'title' => get_string(
+            'downloadcoursepdf',
             'local_feedbackdashboard'
         ),
-        [
-            'class' => 'btn btn-sm btn-primary',
-        ]
-    );
+    ]
+);
 
-    $actions .= html_writer::end_div();
+$actions .= html_writer::end_div();
 
     /*
      * Table row.
