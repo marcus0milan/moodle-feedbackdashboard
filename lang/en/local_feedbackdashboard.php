@@ -51,3 +51,4 @@ $string['coursenps'] = 'Course NPS';
 $string['searchcourses'] = 'Search courses';
 $string['courseswithnps'] = 'Courses with NPS';
 $string['nocourseswithnps'] = 'No courses with NPS surveys were found.';
+$string['downloadcoursepdf'] = 'Download PDF report';
