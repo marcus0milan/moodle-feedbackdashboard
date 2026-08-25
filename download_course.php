@@ -778,7 +778,11 @@ function local_feedbackdashboard_coursepdf_draw_nps_chart_page(
                  * Negative NPS = Red.
                  * NPS equals or greater than 0 = AVA primary colour.
                  */
-                
+            $barcolor = $nps < 0
+               ? '#E76F51'
+               : $primary;
+               
+               
             local_feedbackdashboard_coursepdf_set_fill(
                 $pdf,
                 $primary
