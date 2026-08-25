@@ -223,6 +223,473 @@ $coursenps = $totalvalidresponses > 0
     ? (($totalpromoters - $totaldetractors) / $totalvalidresponses) * 100
     : null;
 
+$activityfilterjavascript = <<<'JS'
+(function() {
+    'use strict';
+
+    const form = document.getElementById(
+        'feedbackdashboard-activity-filter-form'
+    );
+
+    if (!form) {
+        return;
+    }
+
+    const picker = document.getElementById(
+        'feedbackdashboard-activity-picker'
+    );
+
+    const searchInput = document.getElementById(
+        'feedbackdashboard-activity-search'
+    );
+
+    const tagsContainer = document.getElementById(
+        'feedbackdashboard-selected-activities'
+    );
+
+    const hiddenInputs = document.getElementById(
+        'feedbackdashboard-selected-activity-inputs'
+    );
+
+    const suggestions = document.getElementById(
+        'feedbackdashboard-activity-suggestions'
+    );
+
+    const emptySuggestion = document.getElementById(
+        'feedbackdashboard-no-activity-suggestion'
+    );
+
+    const clearButton = document.getElementById(
+        'feedbackdashboard-clear-selected-activities'
+    );
+
+    const selectionLive = document.getElementById(
+        'feedbackdashboard-activity-selection-live'
+    );
+
+    const suggestionButtons = Array.from(
+        form.querySelectorAll(
+            '.feedbackdashboard-activity-suggestion'
+        )
+    );
+
+    const selected = new Set();
+
+    if (tagsContainer) {
+        tagsContainer
+            .querySelectorAll(
+                '.feedbackdashboard-activity-tag'
+            )
+            .forEach(function(tag) {
+                const activityid =
+                    String(tag.dataset.activityId || '');
+
+                if (activityid !== '') {
+                    selected.add(activityid);
+                }
+            });
+    }
+
+    const normalise = function(value) {
+        return (value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toLocaleLowerCase();
+    };
+
+    const updateSelectionState = function() {
+        if (clearButton) {
+            clearButton.hidden = selected.size === 0;
+        }
+
+        if (selectionLive) {
+            if (selected.size === 0) {
+                selectionLive.textContent =
+                    'Todas as atividades com NPS serão consideradas.';
+            } else if (selected.size === 1) {
+                selectionLive.textContent =
+                    '1 atividade selecionada.';
+            } else {
+                selectionLive.textContent =
+                    selected.size + ' atividades selecionadas.';
+            }
+        }
+
+        if (searchInput) {
+            searchInput.placeholder =
+                selected.size === 0
+                    ? 'Digite ou escolha uma atividade...'
+                    : 'Adicionar outra atividade...';
+        }
+    };
+
+    const closeSuggestions = function() {
+        if (suggestions) {
+            suggestions.hidden = true;
+        }
+
+        if (searchInput) {
+            searchInput.setAttribute(
+                'aria-expanded',
+                'false'
+            );
+        }
+    };
+
+    const updateSuggestions = function() {
+        if (!suggestions || !searchInput) {
+            return;
+        }
+
+        const term = normalise(searchInput.value);
+        let visibleCount = 0;
+
+        suggestionButtons.forEach(function(button) {
+            const activityid =
+                String(button.dataset.activityId || '');
+
+            const activityname =
+                normalise(
+                    button.dataset.activityName || ''
+                );
+
+            const matchesText =
+                term === ''
+                || activityname.includes(term);
+
+            const matches =
+                matchesText
+                && !selected.has(activityid);
+
+            button.hidden = !matches;
+
+            if (matches) {
+                visibleCount++;
+            }
+        });
+
+        if (emptySuggestion) {
+            emptySuggestion.hidden =
+                visibleCount > 0;
+        }
+
+        suggestions.hidden = false;
+
+        searchInput.setAttribute(
+            'aria-expanded',
+            'true'
+        );
+    };
+
+    const createHiddenInput = function(activityid) {
+        if (!hiddenInputs) {
+            return;
+        }
+
+        const input = document.createElement('input');
+
+        input.type = 'hidden';
+        input.name = 'activities[]';
+        input.value = activityid;
+        input.dataset.activityId = activityid;
+
+        hiddenInputs.appendChild(input);
+    };
+
+    const removeHiddenInput = function(activityid) {
+        if (!hiddenInputs) {
+            return;
+        }
+
+        const inputs = Array.from(
+            hiddenInputs.querySelectorAll(
+                'input[name="activities[]"]'
+            )
+        );
+
+        const input = inputs.find(function(current) {
+            return String(
+                current.dataset.activityId
+                || current.value
+            ) === activityid;
+        });
+
+        if (input) {
+            input.remove();
+        }
+    };
+
+    const createTag = function(
+        activityid,
+        activityname
+    ) {
+        if (!tagsContainer) {
+            return;
+        }
+
+        const tag = document.createElement('span');
+
+        tag.className =
+            'feedbackdashboard-activity-tag';
+
+        tag.dataset.activityId = activityid;
+
+        const label =
+            document.createElement('span');
+
+        label.className =
+            'feedbackdashboard-activity-tag-label';
+
+        label.textContent = activityname;
+
+        const remove =
+            document.createElement('button');
+
+        remove.type = 'button';
+
+        remove.className =
+            'feedbackdashboard-activity-tag-remove';
+
+        remove.dataset.activityId = activityid;
+
+        remove.title = 'Remover atividade';
+
+        remove.setAttribute(
+            'aria-label',
+            'Remover ' + activityname
+        );
+
+        remove.textContent = '×';
+
+        tag.appendChild(label);
+        tag.appendChild(remove);
+
+        tagsContainer.appendChild(tag);
+    };
+
+    const addActivity = function(
+        activityid,
+        activityname
+    ) {
+        activityid = String(activityid || '');
+
+        if (
+            activityid === ''
+            || selected.has(activityid)
+        ) {
+            return;
+        }
+
+        selected.add(activityid);
+
+        createTag(
+            activityid,
+            activityname
+        );
+
+        createHiddenInput(activityid);
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+
+        updateSelectionState();
+        updateSuggestions();
+    };
+
+    const removeActivity = function(activityid) {
+        activityid = String(activityid || '');
+
+        if (
+            activityid === ''
+            || !selected.has(activityid)
+        ) {
+            return;
+        }
+
+        selected.delete(activityid);
+
+        if (tagsContainer) {
+            const tags = Array.from(
+                tagsContainer.querySelectorAll(
+                    '.feedbackdashboard-activity-tag'
+                )
+            );
+
+            const tag = tags.find(function(current) {
+                return String(
+                    current.dataset.activityId || ''
+                ) === activityid;
+            });
+
+            if (tag) {
+                tag.remove();
+            }
+        }
+
+        removeHiddenInput(activityid);
+
+        updateSelectionState();
+
+        if (searchInput) {
+            searchInput.focus();
+        }
+
+        updateSuggestions();
+    };
+
+    const clearActivities = function() {
+        selected.clear();
+
+        if (tagsContainer) {
+            tagsContainer.innerHTML = '';
+        }
+
+        if (hiddenInputs) {
+            hiddenInputs.innerHTML = '';
+        }
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+
+        updateSelectionState();
+        updateSuggestions();
+    };
+
+    suggestionButtons.forEach(function(button) {
+        button.addEventListener(
+            'click',
+            function() {
+                addActivity(
+                    String(
+                        button.dataset.activityId || ''
+                    ),
+                    String(
+                        button.dataset.activityName || ''
+                    )
+                );
+            }
+        );
+    });
+
+    if (tagsContainer) {
+        tagsContainer.addEventListener(
+            'click',
+            function(event) {
+                const removeButton =
+                    event.target.closest(
+                        '.feedbackdashboard-activity-tag-remove'
+                    );
+
+                if (!removeButton) {
+                    return;
+                }
+
+                removeActivity(
+                    String(
+                        removeButton.dataset.activityId
+                        || ''
+                    )
+                );
+            }
+        );
+    }
+
+    if (clearButton) {
+        clearButton.addEventListener(
+            'click',
+            clearActivities
+        );
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener(
+            'input',
+            updateSuggestions
+        );
+
+        searchInput.addEventListener(
+            'focus',
+            updateSuggestions
+        );
+
+        searchInput.addEventListener(
+            'keydown',
+            function(event) {
+                if (
+                    event.key === 'Backspace'
+                    && searchInput.value === ''
+                    && tagsContainer
+                ) {
+                    const tags =
+                        tagsContainer.querySelectorAll(
+                            '.feedbackdashboard-activity-tag'
+                        );
+
+                    const lastTag =
+                        tags.length > 0
+                            ? tags[tags.length - 1]
+                            : null;
+
+                    if (lastTag) {
+                        removeActivity(
+                            String(
+                                lastTag.dataset.activityId
+                                || ''
+                            )
+                        );
+                    }
+                }
+
+                if (event.key === 'Escape') {
+                    closeSuggestions();
+                }
+
+                if (
+                    event.key === 'Enter'
+                    && suggestions
+                    && !suggestions.hidden
+                ) {
+                    const firstVisible =
+                        suggestionButtons.find(
+                            function(button) {
+                                return !button.hidden;
+                            }
+                        );
+
+                    if (firstVisible) {
+                        event.preventDefault();
+                        firstVisible.click();
+                    }
+                }
+            }
+        );
+    }
+
+    document.addEventListener(
+        'click',
+        function(event) {
+            if (
+                picker
+                && !picker.contains(event.target)
+            ) {
+                closeSuggestions();
+            }
+        }
+    );
+
+    updateSelectionState();
+})();
+JS;
+
+$PAGE->requires->js_init_code(
+    $activityfilterjavascript
+);
+
 echo $OUTPUT->header();
 
 echo $OUTPUT->heading(
