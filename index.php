@@ -1170,9 +1170,22 @@ $dashboardcss = '
     border-radius:.25rem;
     padding:1rem;
     height:100%;
+    overflow:hidden;
 }
 
-/* Participant filter. */
+.feedbackdashboard-chartbox .chart-container,
+.feedbackdashboard-chartbox .chart-area,
+.feedbackdashboard-chartbox canvas {
+    max-width:100% !important;
+    width:100% !important;
+}
+
+.feedbackdashboard-chartbox canvas {
+    display:block;
+    height:auto !important;
+}
+
+
 .feedbackdashboard-filter-card {
     border:1px solid ' . $border . ';
     border-radius:.55rem;
