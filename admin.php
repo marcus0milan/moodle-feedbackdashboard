@@ -312,6 +312,7 @@ $actions .= html_writer::link(
     ),
     [
         'class' => 'btn btn-sm btn-primary',
+        'style' => 'width:170px; min-height:38px; display:inline-flex; align-items:center; justify-content:center;',
     ]
 );
 
@@ -331,6 +332,7 @@ $actions .= html_writer::link(
     $pdfbuttoncontent,
     [
         'class' => 'btn btn-sm btn-outline-primary',
+        'style' => 'width:170px; min-height:38px; display:inline-flex; align-items:center; justify-content:center; gap:.35rem;',
         'title' => get_string(
             'downloadcoursepdf',
             'local_feedbackdashboard'
