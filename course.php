@@ -692,6 +692,174 @@ $PAGE->requires->js_init_code(
 
 echo $OUTPUT->header();
 
+$activityfiltercss = '
+.feedbackdashboard-activity-filter {
+    max-width:100%;
+}
+
+.feedbackdashboard-activity-picker {
+    position:relative;
+}
+
+.feedbackdashboard-activity-picker-box {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:.4rem;
+    min-height:46px;
+    padding:.38rem .5rem;
+    background:#fff;
+    border:1px solid #ced4da;
+    border-radius:.45rem;
+    transition:border-color .15s ease, box-shadow .15s ease;
+}
+
+.feedbackdashboard-activity-picker-box:focus-within {
+    border-color:var(--bs-primary, #0f6cbf);
+    box-shadow:0 0 0 .18rem rgba(15,108,191,.15);
+}
+
+.feedbackdashboard-selected-activities {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:.35rem;
+}
+
+.feedbackdashboard-activity-tag {
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+    max-width:100%;
+    padding:.28rem .42rem .28rem .58rem;
+    border:1px solid #cbd5e1;
+    border-radius:.38rem;
+    background:#f1f5f9;
+    color:#263746;
+    font-size:.82rem;
+    font-weight:600;
+    line-height:1.25;
+}
+
+.feedbackdashboard-activity-tag-label {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:320px;
+}
+
+.feedbackdashboard-activity-tag-remove {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:20px;
+    height:20px;
+    padding:0;
+    border:0;
+    border-radius:50%;
+    background:transparent;
+    color:#263746;
+    font-size:1rem;
+    font-weight:700;
+    line-height:1;
+    cursor:pointer;
+}
+
+.feedbackdashboard-activity-tag-remove:hover,
+.feedbackdashboard-activity-tag-remove:focus {
+    background:#e2e8f0;
+    outline:0;
+}
+
+.feedbackdashboard-activity-search-input {
+    flex:1 1 260px;
+    min-width:200px;
+    height:32px;
+    padding:.2rem .25rem;
+    border:0 !important;
+    outline:0 !important;
+    box-shadow:none !important;
+    background:transparent;
+}
+
+.feedbackdashboard-activity-suggestions {
+    position:absolute;
+    z-index:1050;
+    top:calc(100% + .3rem);
+    left:0;
+    right:0;
+    max-height:280px;
+    overflow-y:auto;
+    padding:.3rem;
+    background:#fff;
+    border:1px solid #ced4da;
+    border-radius:.45rem;
+    box-shadow:0 .45rem 1.1rem rgba(15,23,42,.14);
+}
+
+.feedbackdashboard-activity-suggestion {
+    display:block;
+    width:100%;
+    padding:.58rem .7rem;
+    border:0;
+    border-radius:.3rem;
+    background:#fff;
+    color:#263746;
+    text-align:left;
+    cursor:pointer;
+}
+
+.feedbackdashboard-activity-suggestion:hover,
+.feedbackdashboard-activity-suggestion:focus {
+    background:#f1f5f9;
+    outline:0;
+}
+
+.feedbackdashboard-activity-suggestion-name {
+    display:block;
+    font-size:.88rem;
+    font-weight:600;
+}
+
+.feedbackdashboard-activity-picker-empty {
+    padding:.7rem;
+    color:#637083;
+    font-size:.82rem;
+}
+
+.feedbackdashboard-activity-picker-help {
+    margin-top:.45rem;
+    color:#637083;
+    font-size:.76rem;
+    line-height:1.4;
+}
+
+.feedbackdashboard-activity-selection-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:.75rem;
+    margin-top:.6rem;
+}
+
+.feedbackdashboard-activity-selection-live {
+    color:#637083;
+    font-size:.76rem;
+}
+
+@media (max-width:767.98px) {
+    .feedbackdashboard-activity-selection-row {
+        align-items:flex-start;
+        flex-direction:column;
+    }
+}
+';
+
+echo html_writer::tag(
+    'style',
+    $activityfiltercss
+);
+
 echo $OUTPUT->heading(
     'Dashboard NPS - ' . format_string($course->fullname)
 );
