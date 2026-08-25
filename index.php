@@ -2257,7 +2257,7 @@ if ($npsitem === null) {
     echo html_writer::end_div();
 
     // Score distribution 0..10 using Moodle's native chart.
-    echo html_writer::start_div('col-12 col-xl-6');
+    echo html_writer::start_div('col-12 col-xl-6 feedbackdashboard-chart-col');
     echo html_writer::start_div('feedbackdashboard-chartbox');
     echo html_writer::tag('h3', 'Gráfico de Avaliações por Nota', ['class' => 'h5 mb-2']);
 
