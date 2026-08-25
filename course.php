@@ -21,8 +21,12 @@ use local_feedbackdashboard\local\nps_service;
 
 $courseid = required_param('id', PARAM_INT);
 
-$search = optional_param('search', '', PARAM_TEXT);
-$search = trim($search);
+$selectedactivityids = optional_param_array('activities', [], PARAM_INT);
+$selectedactivityids = array_values(
+    array_unique(
+        array_map('intval', $selectedactivityids)
+    )
+);
 
 $course = get_course($courseid);
 
@@ -62,16 +66,6 @@ $where = [
     'c.id = :courseid',
 ];
 
-if ($search !== '') {
-    $params['searchfeedback'] = '%' . $DB->sql_like_escape($search) . '%';
-
-    $where[] = $DB->sql_like(
-        'f.name',
-        ':searchfeedback',
-        false
-    );
-}
-
 $sql = "SELECT
             cm.id AS cmid,
             f.id AS feedbackid,
@@ -89,6 +83,8 @@ $sql = "SELECT
       ORDER BY c.fullname ASC, f.name ASC, cm.id ASC";
 
 $records = $DB->get_records_sql($sql, $params);
+
+$availableactivities = [];
 
 $rows = [];
 $totalsurveys = 0;
