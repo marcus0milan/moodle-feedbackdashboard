@@ -1170,21 +1170,34 @@ $dashboardcss = '
     border-radius:.25rem;
     padding:1rem;
     height:100%;
-    overflow:hidden;
+    min-width:0;
+    box-sizing:border-box;
 }
 
-.feedbackdashboard-chartbox .chart-container,
+.feedbackdashboard-chart-col {
+    min-width:0;
+}
+
 .feedbackdashboard-chartbox .chart-area,
-.feedbackdashboard-chartbox canvas {
-    max-width:100% !important;
+.feedbackdashboard-chartbox .chart-image {
     width:100% !important;
+    max-width:100% !important;
+    min-width:0 !important;
+    box-sizing:border-box;
 }
 
-.feedbackdashboard-chartbox canvas {
-    display:block;
-    height:auto !important;
+.feedbackdashboard-chartbox .chart-image {
+    position:relative;
+    height:350px;
 }
 
+.feedbackdashboard-chartbox .chart-image canvas {
+    display:block !important;
+    width:100% !important;
+    max-width:100% !important;
+    height:100% !important;
+    min-width:0 !important;
+}
 
 .feedbackdashboard-filter-card {
     border:1px solid ' . $border . ';
