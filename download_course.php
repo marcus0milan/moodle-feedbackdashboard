@@ -768,11 +768,17 @@ function local_feedbackdashboard_coursepdf_draw_nps_chart_page(
             $barwidth =
                 (abs($nps) / 100)
                 * ($chartw / 2);
-
+            
+                
             $barx = $nps >= 0
                 ? $zerox
                 : $zerox - $barwidth;
 
+                /*
+                 * Negative NPS = Red.
+                 * NPS equals or greater than 0 = AVA primary colour.
+                 */
+                
             local_feedbackdashboard_coursepdf_set_fill(
                 $pdf,
                 $primary
