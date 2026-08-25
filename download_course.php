@@ -303,16 +303,9 @@ function local_feedbackdashboard_coursepdf_draw_logo(
     '',
     '',
     '',
-    true,
-    300,
-    '',
     false,
-    false,
-    0,
-    true,
-    false,
-    false
-    );
+    300
+);
 }
 
 /**
