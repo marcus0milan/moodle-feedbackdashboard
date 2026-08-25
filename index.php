@@ -709,80 +709,334 @@ $filterjavascript = <<<'JS'
         return;
     }
 
-    const allCheckbox = document.getElementById('feedbackdashboard-filter-all');
     const groupSelect = document.getElementById('feedbackdashboard-group-filter');
-    const userCheckboxes = Array.from(
-        form.querySelectorAll('.feedbackdashboard-user-checkbox')
-    );
+    const picker = document.getElementById('feedbackdashboard-user-picker');
     const searchInput = document.getElementById('feedbackdashboard-student-search');
-    const studentOptions = Array.from(
-        form.querySelectorAll('.feedbackdashboard-student-option')
+    const tagsContainer = document.getElementById('feedbackdashboard-selected-users');
+    const hiddenInputs = document.getElementById('feedbackdashboard-selected-user-inputs');
+    const suggestions = document.getElementById('feedbackdashboard-user-suggestions');
+
+    const suggestionButtons = Array.from(
+        form.querySelectorAll('.feedbackdashboard-user-suggestion')
     );
 
-    let submitTimer = null;
+    const emptySuggestion = document.getElementById(
+        'feedbackdashboard-no-user-suggestion'
+    );
 
-    const scheduleSubmit = function() {
-        window.clearTimeout(submitTimer);
-        submitTimer = window.setTimeout(function() {
-            form.submit();
-        }, 700);
+    const selected = new Set();
+
+    if (tagsContainer) {
+        tagsContainer
+            .querySelectorAll('.feedbackdashboard-user-tag')
+            .forEach(function(tag) {
+                selected.add(String(tag.dataset.userId || ''));
+            });
+    }
+
+    const normalise = function(value) {
+        return (value || '').trim().toLocaleLowerCase();
     };
 
-    /*
-     * Changing group refreshes the participant list immediately.
-     * Previously checked students are cleared so selections from another
-     * group are never carried into the new group.
-     */
-    if (groupSelect) {
-        groupSelect.addEventListener('change', function() {
-            userCheckboxes.forEach(function(checkbox) {
-                checkbox.checked = false;
+    const closeSuggestions = function() {
+        if (suggestions) {
+            suggestions.hidden = true;
+        }
+    };
+
+    const updateSuggestions = function() {
+        if (!suggestions || !searchInput) {
+            return;
+        }
+
+        const term = normalise(searchInput.value);
+
+        if (term === '') {
+            closeSuggestions();
+            return;
+        }
+
+        let visibleCount = 0;
+
+        suggestionButtons.forEach(function(button) {
+            const userid = String(button.dataset.userId || '');
+            const username = normalise(button.dataset.userName || '');
+
+            const matches =
+                username.includes(term)
+                && !selected.has(userid);
+
+            button.hidden = !matches;
+
+            if (matches) {
+                visibleCount++;
+            }
+        });
+
+        if (emptySuggestion) {
+            emptySuggestion.hidden = visibleCount > 0;
+        }
+
+        suggestions.hidden = false;
+    };
+
+    const createHiddenInput = function(userid) {
+        if (!hiddenInputs) {
+            return;
+        }
+
+        const input = document.createElement('input');
+
+        input.type = 'hidden';
+        input.name = 'users[]';
+        input.value = userid;
+        input.dataset.userId = userid;
+
+        hiddenInputs.appendChild(input);
+    };
+
+    const removeHiddenInput = function(userid) {
+        if (!hiddenInputs) {
+            return;
+        }
+
+        const inputs = Array.from(
+            hiddenInputs.querySelectorAll('input[name="users[]"]')
+        );
+
+        const input = inputs.find(function(current) {
+            return String(
+                current.dataset.userId || current.value
+            ) === userid;
+        });
+
+        if (input) {
+            input.remove();
+        }
+    };
+
+    const createTag = function(userid, username) {
+        if (!tagsContainer) {
+            return;
+        }
+
+        const tag = document.createElement('span');
+
+        tag.className = 'feedbackdashboard-user-tag';
+        tag.dataset.userId = userid;
+
+        const label = document.createElement('span');
+
+        label.className = 'feedbackdashboard-user-tag-label';
+        label.textContent = username;
+
+        const remove = document.createElement('button');
+
+        remove.type = 'button';
+        remove.className = 'feedbackdashboard-user-tag-remove';
+        remove.dataset.userId = userid;
+        remove.setAttribute(
+            'aria-label',
+            'Remover ' + username
+        );
+
+        remove.title = 'Remover aluno';
+        remove.textContent = '×';
+
+        tag.appendChild(label);
+        tag.appendChild(remove);
+
+        tagsContainer.appendChild(tag);
+    };
+
+    const addUser = function(userid, username) {
+        userid = String(userid || '');
+
+        if (
+            userid === ''
+            || selected.has(userid)
+        ) {
+            return;
+        }
+
+        selected.add(userid);
+
+        createTag(
+            userid,
+            username
+        );
+
+        createHiddenInput(userid);
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+
+        closeSuggestions();
+    };
+
+    const removeUser = function(userid) {
+        userid = String(userid || '');
+
+        if (
+            userid === ''
+            || !selected.has(userid)
+        ) {
+            return;
+        }
+
+        selected.delete(userid);
+
+        if (tagsContainer) {
+            const tags = Array.from(
+                tagsContainer.querySelectorAll(
+                    '.feedbackdashboard-user-tag'
+                )
+            );
+
+            const tag = tags.find(function(current) {
+                return String(
+                    current.dataset.userId || ''
+                ) === userid;
             });
 
-            if (allCheckbox) {
-                allCheckbox.checked = true;
+            if (tag) {
+                tag.remove();
             }
+        }
 
-            form.submit();
-        });
+        removeHiddenInput(userid);
+        updateSuggestions();
+
+        if (searchInput) {
+            searchInput.focus();
+        }
+    };
+
+    if (groupSelect) {
+        groupSelect.addEventListener(
+            'change',
+            function() {
+                if (hiddenInputs) {
+                    hiddenInputs.innerHTML = '';
+                }
+
+                form.submit();
+            }
+        );
     }
 
-    if (allCheckbox) {
-        allCheckbox.addEventListener('change', function() {
-            if (allCheckbox.checked) {
-                userCheckboxes.forEach(function(checkbox) {
-                    checkbox.checked = false;
-                });
-            } else if (!userCheckboxes.some(function(checkbox) { return checkbox.checked; })) {
-                allCheckbox.checked = true;
+    suggestionButtons.forEach(function(button) {
+        button.addEventListener(
+            'click',
+            function() {
+                addUser(
+                    String(button.dataset.userId || ''),
+                    String(button.dataset.userName || '')
+                );
             }
-
-            scheduleSubmit();
-        });
-    }
-
-    userCheckboxes.forEach(function(checkbox) {
-        checkbox.addEventListener('change', function() {
-            if (allCheckbox) {
-                allCheckbox.checked = !userCheckboxes.some(function(current) {
-                    return current.checked;
-                });
-            }
-
-            scheduleSubmit();
-        });
+        );
     });
 
-    if (searchInput) {
-        searchInput.addEventListener('input', function() {
-            const term = searchInput.value.trim().toLocaleLowerCase();
+    if (tagsContainer) {
+        tagsContainer.addEventListener(
+            'click',
+            function(event) {
+                const removeButton =
+                    event.target.closest(
+                        '.feedbackdashboard-user-tag-remove'
+                    );
 
-            studentOptions.forEach(function(option) {
-                const name = (option.dataset.studentName || '').toLocaleLowerCase();
-                option.hidden = term !== '' && !name.includes(term);
-            });
-        });
+                if (!removeButton) {
+                    return;
+                }
+
+                removeUser(
+                    String(removeButton.dataset.userId || '')
+                );
+            }
+        );
     }
+
+    if (searchInput) {
+        searchInput.addEventListener(
+            'input',
+            updateSuggestions
+        );
+
+        searchInput.addEventListener(
+            'focus',
+            function() {
+                if (
+                    searchInput.value.trim() !== ''
+                ) {
+                    updateSuggestions();
+                }
+            }
+        );
+
+        searchInput.addEventListener(
+            'keydown',
+            function(event) {
+                if (
+                    event.key === 'Backspace'
+                    && searchInput.value === ''
+                    && tagsContainer
+                ) {
+                    const tags =
+                        tagsContainer.querySelectorAll(
+                            '.feedbackdashboard-user-tag'
+                        );
+
+                    const lastTag =
+                        tags.length > 0
+                            ? tags[tags.length - 1]
+                            : null;
+
+                    if (lastTag) {
+                        removeUser(
+                            String(lastTag.dataset.userId || '')
+                        );
+                    }
+                }
+
+                if (event.key === 'Escape') {
+                    closeSuggestions();
+                }
+
+                if (
+                    event.key === 'Enter'
+                    && suggestions
+                    && !suggestions.hidden
+                ) {
+                    const firstVisible =
+                        suggestionButtons.find(
+                            function(button) {
+                                return !button.hidden;
+                            }
+                        );
+
+                    if (firstVisible) {
+                        event.preventDefault();
+                        firstVisible.click();
+                    }
+                }
+            }
+        );
+    }
+
+    document.addEventListener(
+        'click',
+        function(event) {
+            if (
+                picker
+                && !picker.contains(event.target)
+            ) {
+                closeSuggestions();
+            }
+        }
+    );
 })();
 JS;
 
