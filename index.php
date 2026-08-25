@@ -1380,102 +1380,248 @@ if (!$isanonymous) {
     echo html_writer::end_div();
     echo html_writer::end_div();
 
-    /*
-     * -------------------------------------------------------------
-     * Right side: responders in the selected group.
-     * -------------------------------------------------------------
-     */
-    echo html_writer::start_div('col-12 col-lg-8');
-    echo html_writer::start_div('feedbackdashboard-filter-list');
+echo html_writer::start_div('col-12 col-lg-8');
 
-    echo html_writer::start_div('form-check border-bottom pb-2 mb-2');
+echo html_writer::tag(
+    'label',
+    'Selecionar alunos',
+    [
+        'for' => 'feedbackdashboard-student-search',
+        'class' => 'form-label feedbackdashboard-filter-label',
+    ]
+);
 
-    $allattributes = [
-        'type' => 'checkbox',
-        'id' => 'feedbackdashboard-filter-all',
-        'class' => 'form-check-input',
-        'value' => '1',
-    ];
+if (empty($responders)) {
+    $emptymessage = $selectedgroupid > 0
+        ? 'Nenhum participante deste grupo respondeu esta pesquisa.'
+        : 'Ainda não há alunos identificados que responderam esta pesquisa.';
 
-    if (empty($selecteduserids)) {
-        $allattributes['checked'] = 'checked';
-    }
+    echo html_writer::start_div(
+        'feedbackdashboard-filter-list'
+    );
 
-    echo html_writer::empty_tag('input', $allattributes);
-
-    $alllabel = $selectedgroupid > 0
-        ? 'Todos os alunos do grupo'
-        : 'Todos os alunos';
-
-    echo html_writer::tag('label', $alllabel, [
-        'for' => 'feedbackdashboard-filter-all',
-        'class' => 'form-check-label fw-bold',
-    ]);
+    echo html_writer::div(
+        s($emptymessage),
+        'text-muted py-3'
+    );
 
     echo html_writer::end_div();
+} else {
 
-    if (empty($responders)) {
-        $emptymessage = $selectedgroupid > 0
-            ? 'Nenhum participante deste grupo respondeu esta pesquisa.'
-            : 'Ainda não há alunos identificados que responderam esta pesquisa.';
+    echo html_writer::start_div(
+        'feedbackdashboard-user-picker',
+        [
+            'id' => 'feedbackdashboard-user-picker',
+        ]
+    );
 
-        echo html_writer::div(
-            s($emptymessage),
-            'text-muted py-3'
-        );
-    } else {
-        echo html_writer::start_div('overflow-auto', [
-            'style' => 'max-height:190px;',
-        ]);
+    echo html_writer::start_div(
+        'feedbackdashboard-user-picker-box'
+    );
 
-        foreach ($responders as $responder) {
-            $responderid = (int) $responder->id;
-            $respondername = fullname($responder);
-            $checkboxid = 'feedbackdashboard-user-' . $responderid;
+    /*
+     * Tags já selecionadas.
+     */
+    echo html_writer::start_div(
+        'feedbackdashboard-selected-users',
+        [
+            'id' => 'feedbackdashboard-selected-users',
+        ]
+    );
 
-            $checkboxattributes = [
-                'type' => 'checkbox',
-                'id' => $checkboxid,
-                'name' => 'users[]',
-                'value' => $responderid,
-                'class' => 'form-check-input feedbackdashboard-user-checkbox',
-            ];
+    foreach ($selecteduserids as $selecteduserid) {
 
-            if (in_array($responderid, $selecteduserids, true)) {
-                $checkboxattributes['checked'] = 'checked';
-            }
-
-            echo html_writer::start_div(
-                'form-check py-1 feedbackdashboard-student-option',
-                [
-                    'data-student-name' => core_text::strtolower($respondername),
-                ]
-            );
-
-            echo html_writer::empty_tag(
-                'input',
-                $checkboxattributes
-            );
-
-            echo html_writer::tag(
-                'label',
-                s($respondername),
-                [
-                    'for' => $checkboxid,
-                    'class' => 'form-check-label',
-                ]
-            );
-
-            echo html_writer::end_div();
+        if (!isset($responders[$selecteduserid])) {
+            continue;
         }
 
-        echo html_writer::end_div();
+        $selectedresponder =
+            $responders[$selecteduserid];
+
+        $selectedname =
+            fullname($selectedresponder);
+
+        echo html_writer::start_tag(
+            'span',
+            [
+                'class' =>
+                    'feedbackdashboard-user-tag',
+
+                'data-user-id' =>
+                    $selecteduserid,
+            ]
+        );
+
+        echo html_writer::span(
+            s($selectedname),
+            'feedbackdashboard-user-tag-label'
+        );
+
+        echo html_writer::tag(
+            'button',
+            '×',
+            [
+                'type' => 'button',
+
+                'class' =>
+                    'feedbackdashboard-user-tag-remove',
+
+                'data-user-id' =>
+                    $selecteduserid,
+
+                'title' =>
+                    'Remover aluno',
+
+                'aria-label' =>
+                    'Remover ' . $selectedname,
+            ]
+        );
+
+        echo html_writer::end_tag('span');
     }
 
     echo html_writer::end_div();
-    echo html_writer::end_div();
+
+    /*
+     * Caixa onde o nome é digitado.
+     */
+    echo html_writer::empty_tag(
+        'input',
+        [
+            'type' => 'search',
+
+            'id' =>
+                'feedbackdashboard-student-search',
+
+            'class' =>
+                'feedbackdashboard-user-search-input',
+
+            'placeholder' =>
+                empty($selecteduserids)
+                    ? 'Digite o nome do aluno...'
+                    : 'Adicionar outro aluno...',
+
+            'aria-autocomplete' => 'list',
+
+            'aria-controls' =>
+                'feedbackdashboard-user-suggestions',
+        ]
+    );
 
     echo html_writer::end_div();
+
+    /*
+     * Mantém users[] para o backend atual.
+     */
+    echo html_writer::start_div(
+        '',
+        [
+            'id' =>
+                'feedbackdashboard-selected-user-inputs',
+        ]
+    );
+
+    foreach ($selecteduserids as $selecteduserid) {
+
+        echo html_writer::empty_tag(
+            'input',
+            [
+                'type' => 'hidden',
+                'name' => 'users[]',
+                'value' => $selecteduserid,
+
+                'data-user-id' =>
+                    $selecteduserid,
+            ]
+        );
+    }
+
+    echo html_writer::end_div();
+
+    /*
+     * Dropbox/autocomplete.
+     */
+    echo html_writer::start_div(
+        'feedbackdashboard-user-suggestions',
+        [
+            'id' =>
+                'feedbackdashboard-user-suggestions',
+
+            'role' => 'listbox',
+            'hidden' => 'hidden',
+        ]
+    );
+
+    foreach ($responders as $responder) {
+
+        $responderid =
+            (int) $responder->id;
+
+        $respondername =
+            fullname($responder);
+
+        $suggestioncontent =
+            html_writer::span(
+                s($respondername),
+                'feedbackdashboard-user-suggestion-name'
+            );
+
+        if (!empty($responder->email)) {
+
+            $suggestioncontent .=
+                html_writer::span(
+                    s($responder->email),
+                    'feedbackdashboard-user-suggestion-email'
+                );
+        }
+
+        echo html_writer::tag(
+            'button',
+            $suggestioncontent,
+            [
+                'type' => 'button',
+
+                'class' =>
+                    'feedbackdashboard-user-suggestion',
+
+                'data-user-id' =>
+                    $responderid,
+
+                'data-user-name' =>
+                    $respondername,
+
+                'role' => 'option',
+            ]
+        );
+    }
+
+    echo html_writer::div(
+        'Nenhum aluno encontrado.',
+        'feedbackdashboard-user-picker-empty',
+        [
+            'id' =>
+                'feedbackdashboard-no-user-suggestion',
+
+            'hidden' => 'hidden',
+        ]
+    );
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+
+    echo html_writer::tag(
+        'div',
+        empty($selecteduserids)
+            ? 'Nenhum aluno específico selecionado: o Dashboard considera todos os respondentes do grupo atual.'
+            : 'Continue digitando para adicionar outros alunos. Clique no × de uma tag para remover.',
+        [
+            'class' =>
+                'feedbackdashboard-user-picker-help',
+        ]
+    );
+}
+
+echo html_writer::end_div();
 
     /*
      * -------------------------------------------------------------
