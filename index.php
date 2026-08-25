@@ -1052,6 +1052,167 @@ echo $OUTPUT->header();
 
 // Lightweight dashboard styling. Theme colours are injected from Moodle configuration.
 $dashboardcss = '
+.feedbackdashboard-user-picker {
+    position:relative;
+}
+
+.feedbackdashboard-user-picker-box {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:.4rem;
+    min-height:46px;
+    padding:.38rem .5rem;
+    background:#fff;
+    border:1px solid ' . $border . ';
+    border-radius:.45rem;
+    transition:border-color .15s ease, box-shadow .15s ease;
+}
+
+.feedbackdashboard-user-picker-box:focus-within {
+    border-color:' . $primary . ';
+    box-shadow:0 0 0 .18rem '
+        . local_feedbackdashboard_mix_color(
+            $primary,
+            '#FFFFFF',
+            0.78
+        ) . ';
+}
+
+.feedbackdashboard-selected-users {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:.35rem;
+}
+
+.feedbackdashboard-user-tag {
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+    max-width:100%;
+    padding:.28rem .42rem .28rem .58rem;
+    border:1px solid '
+        . local_feedbackdashboard_mix_color(
+            $primary,
+            '#FFFFFF',
+            0.58
+        ) . ';
+    border-radius:.38rem;
+    background:'
+        . local_feedbackdashboard_mix_color(
+            $primary,
+            '#FFFFFF',
+            0.90
+        ) . ';
+    color:' . $dark . ';
+    font-size:.82rem;
+    font-weight:600;
+    line-height:1.25;
+}
+
+.feedbackdashboard-user-tag-label {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:260px;
+}
+
+.feedbackdashboard-user-tag-remove {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:20px;
+    height:20px;
+    padding:0;
+    border:0;
+    border-radius:50%;
+    background:transparent;
+    color:' . $dark . ';
+    font-size:1rem;
+    font-weight:700;
+    line-height:1;
+    cursor:pointer;
+}
+
+.feedbackdashboard-user-tag-remove:hover {
+    background:'
+        . local_feedbackdashboard_mix_color(
+            $primary,
+            '#FFFFFF',
+            0.78
+        ) . ';
+}
+
+.feedbackdashboard-user-search-input {
+    flex:1 1 210px;
+    min-width:170px;
+    height:30px;
+    padding:.2rem .25rem;
+    border:0 !important;
+    outline:0 !important;
+    box-shadow:none !important;
+    background:transparent;
+}
+
+.feedbackdashboard-user-suggestions {
+    position:absolute;
+    z-index:1050;
+    top:calc(100% + .3rem);
+    left:0;
+    right:0;
+    max-height:240px;
+    overflow-y:auto;
+    padding:.3rem;
+    background:#fff;
+    border:1px solid ' . $border . ';
+    border-radius:.45rem;
+    box-shadow:0 .45rem 1.1rem rgba(15,23,42,.14);
+}
+
+.feedbackdashboard-user-suggestion {
+    display:block;
+    width:100%;
+    padding:.58rem .7rem;
+    border:0;
+    border-radius:.3rem;
+    background:#fff;
+    color:#263746;
+    text-align:left;
+    cursor:pointer;
+}
+
+.feedbackdashboard-user-suggestion:hover,
+.feedbackdashboard-user-suggestion:focus {
+    background:' . $light . ';
+    color:' . $dark . ';
+    outline:0;
+}
+
+.feedbackdashboard-user-suggestion-name {
+    display:block;
+    font-size:.88rem;
+    font-weight:600;
+}
+
+.feedbackdashboard-user-suggestion-email {
+    display:block;
+    margin-top:.08rem;
+    color:#637083;
+    font-size:.74rem;
+}
+
+.feedbackdashboard-user-picker-empty {
+    padding:.7rem;
+    color:#637083;
+    font-size:.82rem;
+}
+
+.feedbackdashboard-user-picker-help {
+    font-size:.78rem;
+    color:#637083;
+    margin-top:.45rem;
+}
 .feedbackdashboard-report {background:' . $light . '; border-top:5px solid ' . $primary . '; padding:1.5rem; border-radius:.35rem;}
 .feedbackdashboard-meta {background:#fff; border:1px solid ' . $border . '; padding:.75rem 1rem; margin-bottom:1rem;}
 .feedbackdashboard-card {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; height:100%; position:relative; overflow:hidden;}
