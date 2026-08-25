@@ -307,7 +307,7 @@ $actions = html_writer::start_div(
 $actions .= html_writer::link(
     $courseurl,
     get_string(
-        'opendashboard',
+        'opencourse',
         'local_feedbackdashboard'
     ),
     [
