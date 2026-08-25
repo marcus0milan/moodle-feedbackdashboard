@@ -785,7 +785,7 @@ function local_feedbackdashboard_coursepdf_draw_nps_chart_page(
                
             local_feedbackdashboard_coursepdf_set_fill(
                 $pdf,
-                $primary
+                $barcolor
             );
 
             if ($barwidth > 0) {
