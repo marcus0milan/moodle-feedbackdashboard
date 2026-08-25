@@ -305,7 +305,7 @@ function local_feedbackdashboard_coursepdf_draw_logo(
     '',
     false,
     300
-);
+    );
 }
 
 /**
