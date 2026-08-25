@@ -848,7 +848,9 @@ function local_feedbackdashboard_coursepdf_draw_nps_chart_page(
 }
 
 /**
- * Draws one page of the respondents-by-Feedback horizontal bar chart.
+ * Draws one page of the respondents-by-Feedback horizontal lollipop chart.
+ *
+ * This chart represents absolute integer counts, not percentages.
  *
  * @param pdf $pdf PDF object.
  * @param array $rows Feedback rows.
@@ -886,6 +888,12 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
         $logopath
     );
 
+    /*
+     * -------------------------------------------------------------
+     * Title.
+     * -------------------------------------------------------------
+     */
+
     $pdf->SetFont('helvetica', 'B', 17);
 
     local_feedbackdashboard_coursepdf_set_text(
@@ -916,7 +924,8 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
     $subtitle = 'Curso: ' . $coursename;
 
     if ($pagecount > 1) {
-        $subtitle .= ' - Parte '
+        $subtitle .=
+            ' - Parte '
             . $pageindex
             . ' de '
             . $pagecount;
@@ -930,6 +939,12 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
         1,
         'L'
     );
+
+    /*
+     * -------------------------------------------------------------
+     * Chart container.
+     * -------------------------------------------------------------
+     */
 
     $boxx = 12.0;
     $boxy = 34.0;
@@ -958,31 +973,197 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
         'DF'
     );
 
-    $labelx = 17.0;
-    $labelw = 72.0;
-    $chartx = 96.0;
-    $chartw = 166.0;
-    $valuex = 265.0;
-    $valuew = 16.0;
+    /*
+     * -------------------------------------------------------------
+     * Geometry.
+     *
+     * A larger area is reserved for Feedback names.
+     * -------------------------------------------------------------
+     */
 
-    $rowstart = 44.0;
-    $rowstep = 10.9;
-    $trackh = 4.6;
+    $labelx = 17.0;
+    $labelw = 84.0;
+
+    $chartx = 108.0;
+    $chartw = 145.0;
+
+    $valuex = 260.0;
+    $valuew = 20.0;
+
+    $rowstart = 51.0;
+    $rowstep = 10.5;
+
+    /*
+     * -------------------------------------------------------------
+     * Integer scale.
+     * -------------------------------------------------------------
+     */
 
     $maxresponses = max(
         1,
         $maxresponses
     );
 
-    foreach ($rows as $index => $row) {
-        $rowy = $rowstart + ($index * $rowstep);
+    /*
+     * Create a clean upper limit.
+     */
+    if ($maxresponses <= 10) {
+        $step = 2;
+    } else if ($maxresponses <= 25) {
+        $step = 5;
+    } else if ($maxresponses <= 50) {
+        $step = 10;
+    } else if ($maxresponses <= 100) {
+        $step = 20;
+    } else if ($maxresponses <= 250) {
+        $step = 50;
+    } else if ($maxresponses <= 500) {
+        $step = 100;
+    } else {
+        $step = (int) ceil(
+            $maxresponses / 5 / 100
+        ) * 100;
+    }
 
-        $label = local_feedbackdashboard_coursepdf_chart_label(
-            format_string($row['name']),
-            54
+    $axismax = (int) (
+        ceil($maxresponses / $step)
+        * $step
+    );
+
+    $axismax = max(
+        $step,
+        $axismax
+    );
+
+    /*
+     * -------------------------------------------------------------
+     * Scale header.
+     *
+     * Unlike NPS, this explicitly states that these are people/counts.
+     * -------------------------------------------------------------
+     */
+
+    $pdf->SetFont(
+        'helvetica',
+        'B',
+        6.5
+    );
+
+    local_feedbackdashboard_coursepdf_set_text(
+        $pdf,
+        '#536271'
+    );
+
+    $pdf->SetXY(
+        $chartx,
+        39.0
+    );
+
+    $pdf->Cell(
+        $chartw,
+        4,
+        'Quantidade de respondentes',
+        0,
+        0,
+        'C'
+    );
+
+    /*
+     * Scale marks.
+     */
+    $ticks = 5;
+
+    for ($tick = 0; $tick <= $ticks; $tick++) {
+
+        $ratio = $tick / $ticks;
+
+        $tickx =
+            $chartx
+            + ($chartw * $ratio);
+
+        $tickvalue = (int) round(
+            $axismax * $ratio
         );
 
-        $pdf->SetFont('helvetica', '', 6.7);
+        /*
+         * Vertical guide.
+         */
+        local_feedbackdashboard_coursepdf_set_draw(
+            $pdf,
+            '#E5EAF0'
+        );
+
+        $pdf->SetLineWidth(0.15);
+
+        $pdf->Line(
+            $tickx,
+            47,
+            $tickx,
+            174
+        );
+
+        /*
+         * Integer scale label.
+         */
+        $pdf->SetFont(
+            'helvetica',
+            '',
+            6.2
+        );
+
+        local_feedbackdashboard_coursepdf_set_text(
+            $pdf,
+            '#718096'
+        );
+
+        $pdf->SetXY(
+            $tickx - 7,
+            43.0
+        );
+
+        $pdf->Cell(
+            14,
+            4,
+            (string) $tickvalue,
+            0,
+            0,
+            'C'
+        );
+    }
+
+    /*
+     * -------------------------------------------------------------
+     * Feedback rows.
+     * -------------------------------------------------------------
+     */
+
+    foreach ($rows as $index => $row) {
+
+        $rowy =
+            $rowstart
+            + ($index * $rowstep);
+
+        $responses = max(
+            0,
+            (int) $row['responses']
+        );
+
+        /*
+         * Feedback name.
+         */
+        $label =
+            local_feedbackdashboard_coursepdf_chart_label(
+                format_string(
+                    $row['name']
+                ),
+                62
+            );
+
+        $pdf->SetFont(
+            'helvetica',
+            '',
+            6.7
+        );
 
         local_feedbackdashboard_coursepdf_set_text(
             $pdf,
@@ -991,12 +1172,12 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
 
         $pdf->SetXY(
             $labelx,
-            $rowy - 0.3
+            $rowy - 1.2
         );
 
         $pdf->MultiCell(
             $labelw,
-            7.2,
+            7,
             $label,
             0,
             'L',
@@ -1008,56 +1189,126 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
             0,
             false,
             true,
-            7.2,
+            7,
             'M'
         );
+
+        /*
+         * ---------------------------------------------------------
+         * Background ruler.
+         * ---------------------------------------------------------
+         */
+
+        local_feedbackdashboard_coursepdf_set_draw(
+            $pdf,
+            '#DDE4EA'
+        );
+
+        $pdf->SetLineWidth(1.0);
+
+        $pdf->Line(
+            $chartx,
+            $rowy + 2,
+            $chartx + $chartw,
+            $rowy + 2
+        );
+
+        /*
+         * ---------------------------------------------------------
+         * Data line.
+         *
+         * This is intentionally thin so it does not look like
+         * the NPS percentage bars.
+         * ---------------------------------------------------------
+         */
+
+        $ratio = min(
+            1.0,
+            $responses / $axismax
+        );
+
+        $endpoint =
+            $chartx
+            + ($chartw * $ratio);
+
+        if ($responses > 0) {
+
+            local_feedbackdashboard_coursepdf_set_draw(
+                $pdf,
+                $primary
+            );
+
+            $pdf->SetLineWidth(1.8);
+
+            $pdf->Line(
+                $chartx,
+                $rowy + 2,
+                $endpoint,
+                $rowy + 2
+            );
+
+            /*
+             * Marker at the exact response count.
+             */
+            local_feedbackdashboard_coursepdf_set_fill(
+                $pdf,
+                $primary
+            );
+
+            $markersize = 4.2;
+
+            $pdf->RoundedRect(
+                $endpoint - ($markersize / 2),
+                $rowy + 2 - ($markersize / 2),
+                $markersize,
+                $markersize,
+                2.1,
+                '1111',
+                'F'
+            );
+        }
+
+        /*
+         * ---------------------------------------------------------
+         * Exact integer value.
+         * ---------------------------------------------------------
+         */
 
         local_feedbackdashboard_coursepdf_set_fill(
             $pdf,
             local_feedbackdashboard_coursepdf_mix_color(
                 $primary,
                 '#FFFFFF',
-                0.93
+                0.91
             )
         );
 
+        local_feedbackdashboard_coursepdf_set_draw(
+            $pdf,
+            local_feedbackdashboard_coursepdf_mix_color(
+                $primary,
+                '#FFFFFF',
+                0.65
+            )
+        );
+
+        $pdf->SetLineWidth(0.2);
+
         $pdf->RoundedRect(
-            $chartx,
-            $rowy + 1.0,
-            $chartw,
-            $trackh,
-            0.5,
+            $valuex,
+            $rowy - 1.4,
+            $valuew,
+            6.8,
+            1.2,
             '1111',
-            'F'
+            'DF'
         );
 
-        $responses = max(
-            0,
-            (int) $row['responses']
+        $pdf->SetFont(
+            'helvetica',
+            'B',
+            7.4
         );
-
-        $barwidth =
-            ($responses / $maxresponses)
-            * $chartw;
-
-        if ($barwidth > 0) {
-            local_feedbackdashboard_coursepdf_set_fill(
-                $pdf,
-                $primary
-            );
-
-            $pdf->RoundedRect(
-                $chartx,
-                $rowy + 1.0,
-                $barwidth,
-                $trackh,
-                0.5,
-                '1111',
-                'F'
-            );
-        }
-
-        $pdf->SetFont('helvetica', 'B', 6.8);
 
         local_feedbackdashboard_coursepdf_set_text(
             $pdf,
@@ -1066,20 +1317,30 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
 
         $pdf->SetXY(
             $valuex,
-            $rowy + 0.6
+            $rowy - 0.5
         );
 
         $pdf->Cell(
             $valuew,
-            4.8,
+            5,
             (string) $responses,
             0,
             0,
-            'R'
+            'C'
         );
     }
 
-    $pdf->SetFont('helvetica', '', 6.6);
+    /*
+     * -------------------------------------------------------------
+     * Footer explanation.
+     * -------------------------------------------------------------
+     */
+
+    $pdf->SetFont(
+        'helvetica',
+        '',
+        6.5
+    );
 
     local_feedbackdashboard_coursepdf_set_text(
         $pdf,
@@ -1088,725 +1349,13 @@ function local_feedbackdashboard_coursepdf_draw_response_chart_page(
 
     $pdf->SetXY(
         $chartx,
-        178.0
+        177.5
     );
 
     $pdf->Cell(
         $chartw,
         4,
-        'Número de respostas submetidas',
-        0,
-        0,
-        'C'
-    );
-}
-
-/*
- * -------------------------------------------------------------------------
- * Parameters, permissions and course.
- * -------------------------------------------------------------------------
- */
-
-$id = required_param('id', PARAM_INT);
-
-$course = get_course($id);
-
-require_login($course);
-
-$coursecontext = context_course::instance(
-    $course->id
-);
-
-require_capability(
-    'local/feedbackdashboard:viewall',
-    context_system::instance()
-);
-
-$PAGE->set_url(
-    new moodle_url(
-        '/local/feedbackdashboard/download_course.php',
-        [
-            'id' => $course->id,
-        ]
-    )
-);
-
-$PAGE->set_course($course);
-$PAGE->set_context($coursecontext);
-$PAGE->set_pagelayout('incourse');
-
-/*
- * -------------------------------------------------------------------------
- * Load all Feedback activities from this course.
- * -------------------------------------------------------------------------
- */
-
-$sql = "SELECT
-            cm.id AS cmid,
-            f.id AS feedbackid,
-            f.name AS feedbackname,
-            f.anonymous
-          FROM {feedback} f
-          JOIN {course_modules} cm
-            ON cm.instance = f.id
-          JOIN {modules} m
-            ON m.id = cm.module
-           AND m.name = :modname
-         WHERE cm.course = :courseid
-           AND cm.deletioninprogress = 0
-      ORDER BY f.name ASC, cm.id ASC";
-
-$records = $DB->get_records_sql(
-    $sql,
-    [
-        'modname' => 'feedback',
-        'courseid' => $course->id,
-    ]
-);
-
-/*
- * -------------------------------------------------------------------------
- * Build one summary row per Feedback with a valid NPS question.
- * -------------------------------------------------------------------------
- */
-
-$feedbackrows = [];
-
-$totalresponses = 0;
-$totalvalidresponses = 0;
-$totalpromoters = 0;
-$totalneutrals = 0;
-$totaldetractors = 0;
-
-foreach ($records as $record) {
-    $modulecontext = context_module::instance(
-        (int) $record->cmid,
-        IGNORE_MISSING
-    );
-
-    if (!$modulecontext) {
-        continue;
-    }
-
-    /*
-     * Match the access checks already used by admin.php/course.php.
-     */
-    if (
-        !has_capability(
-            'mod/feedback:viewreports',
-            $modulecontext
-        )
-        || !has_capability(
-            'local/feedbackdashboard:view',
-            $modulecontext
-        )
-    ) {
-        continue;
-    }
-
-    $feedback = (object) [
-        'id' => (int) $record->feedbackid,
-        'anonymous' => (int) $record->anonymous,
-    ];
-
-    $summary = nps_service::get_summary(
-        $feedback
-    );
-
-    /*
-     * Keep exactly the same scope as course.php:
-     * only Feedback activities with a valid NPS question.
-     */
-    if (empty($summary['hasnps'])) {
-        continue;
-    }
-
-    $validresponses = (int) $summary['validresponses'];
-
-    $feedbackrows[] = [
-        'cmid' => (int) $record->cmid,
-        'feedbackid' => (int) $record->feedbackid,
-        'name' => format_string(
-            $record->feedbackname
-        ),
-        'responses' => (int) $summary['totalresponses'],
-        'validresponses' => $validresponses,
-        'nps' => $validresponses > 0
-            ? (float) $summary['nps']
-            : null,
-        'promoters' => (int) $summary['promoters'],
-        'neutrals' => (int) $summary['passives'],
-        'detractors' => (int) $summary['detractors'],
-    ];
-
-    $totalresponses +=
-        (int) $summary['totalresponses'];
-
-    $totalvalidresponses +=
-        $validresponses;
-
-    $totalpromoters +=
-        (int) $summary['promoters'];
-
-    $totalneutrals +=
-        (int) $summary['passives'];
-
-    $totaldetractors +=
-        (int) $summary['detractors'];
-}
-
-/*
- * -------------------------------------------------------------------------
- * Consolidated course metrics.
- * -------------------------------------------------------------------------
- */
-
-$coursenps = $totalvalidresponses > 0
-    ? (
-        (
-            $totalpromoters
-            - $totaldetractors
-        )
-        / $totalvalidresponses
-    ) * 100
-    : null;
-
-$promoterspct = $totalvalidresponses > 0
-    ? ($totalpromoters / $totalvalidresponses) * 100
-    : 0.0;
-
-$neutralspct = $totalvalidresponses > 0
-    ? ($totalneutrals / $totalvalidresponses) * 100
-    : 0.0;
-
-$detractorspct = $totalvalidresponses > 0
-    ? ($totaldetractors / $totalvalidresponses) * 100
-    : 0.0;
-
-/*
- * -------------------------------------------------------------------------
- * Theme colours and logo.
- * -------------------------------------------------------------------------
- */
-
-$primary =
-    local_feedbackdashboard_coursepdf_get_theme_primary_color();
-
-$dark =
-    local_feedbackdashboard_coursepdf_mix_color(
-        $primary,
-        '#000000',
-        0.48
-    );
-
-$light =
-    local_feedbackdashboard_coursepdf_mix_color(
-        $primary,
-        '#FFFFFF',
-        0.95
-    );
-
-$border =
-    local_feedbackdashboard_coursepdf_mix_color(
-        $primary,
-        '#FFFFFF',
-        0.78
-    );
-
-/*
- * Semantic NPS colours remain identical to download.php.
- */
-$goodcolor = '#2A9D8F';
-$neutralcolor = '#E9C46A';
-$badcolor = '#E76F51';
-
-$logopath =
-    local_feedbackdashboard_coursepdf_find_logo();
-
-/*
- * -------------------------------------------------------------------------
- * PDF document.
- * -------------------------------------------------------------------------
- */
-
-$pdf = new pdf(
-    'L',
-    'mm',
-    'A4',
-    true,
-    'UTF-8'
-);
-
-$pdf->setPrintHeader(false);
-$pdf->setPrintFooter(false);
-$pdf->SetAutoPageBreak(false, 0);
-$pdf->SetMargins(0, 0, 0);
-
-$pdf->SetCreator(
-    'Moodle - Feedback Dashboard'
-);
-
-$pdf->SetAuthor(
-    fullname($USER)
-);
-
-$pdf->SetTitle(
-    'Relatório NPS - '
-    . format_string($course->fullname)
-);
-
-$pdf->SetSubject(
-    'Relatório consolidado de NPS do curso'
-);
-
-/*
- * -------------------------------------------------------------------------
- * Page 1 - Course summary.
- * -------------------------------------------------------------------------
- */
-
-$pdf->AddPage();
-
-local_feedbackdashboard_coursepdf_draw_page_base(
-    $pdf,
-    $primary,
-    $dark,
-    $light,
-    $logopath
-);
-
-$pdf->SetFont(
-    'helvetica',
-    'B',
-    18
-);
-
-local_feedbackdashboard_coursepdf_set_text(
-    $pdf,
-    $dark
-);
-
-$pdf->SetXY(
-    12,
-    14
-);
-
-$pdf->Cell(
-    205,
-    8,
-    'Relatório Consolidado de NPS do Curso',
-    0,
-    1,
-    'L'
-);
-
-$pdf->SetFont(
-    'helvetica',
-    'I',
-    8
-);
-
-local_feedbackdashboard_coursepdf_set_text(
-    $pdf,
-    '#637083'
-);
-
-$pdf->SetX(12);
-
-$pdf->Cell(
-    205,
-    4.5,
-    'Curso: '
-        . format_string($course->fullname),
-    0,
-    1,
-    'L'
-);
-
-/*
- * Course metadata.
- */
-$metax = 12.0;
-$metay = 31.0;
-$metaw = 273.0;
-$metah = 22.0;
-
-local_feedbackdashboard_coursepdf_set_fill(
-    $pdf,
-    '#FFFFFF'
-);
-
-local_feedbackdashboard_coursepdf_set_draw(
-    $pdf,
-    $border
-);
-
-$pdf->SetLineWidth(0.25);
-
-$pdf->Rect(
-    $metax,
-    $metay,
-    $metaw,
-    $metah,
-    'DF'
-);
-
-$pdf->SetFont(
-    'helvetica',
-    'B',
-    7.4
-);
-
-local_feedbackdashboard_coursepdf_set_text(
-    $pdf,
-    $dark
-);
-
-$pdf->SetXY(
-    $metax + 4,
-    $metay + 3.1
-);
-
-$pdf->Cell(
-    118,
-    4,
-    'Feedbacks NPS considerados: '
-        . count($feedbackrows),
-    0,
-    1,
-    'L'
-);
-
-$pdf->SetX(
-    $metax + 4
-);
-
-$pdf->Cell(
-    118,
-    4,
-    'Respostas submetidas: '
-        . $totalresponses,
-    0,
-    1,
-    'L'
-);
-
-$pdf->SetX(
-    $metax + 4
-);
-
-$pdf->Cell(
-    118,
-    4,
-    'Respostas NPS válidas: '
-        . $totalvalidresponses,
-    0,
-    1,
-    'L'
-);
-
-$pdf->SetFont(
-    'helvetica',
-    '',
-    6.9
-);
-
-local_feedbackdashboard_coursepdf_set_text(
-    $pdf,
-    '#637083'
-);
-
-$pdf->SetXY(
-    $metax + 165,
-    $metay + 5.2
-);
-
-$pdf->Cell(
-    103,
-    4,
-    'Gerado em: '
-        . userdate(
-            time(),
-            get_string(
-                'strftimedatetimeshort',
-                'langconfig'
-            )
-        ),
-    0,
-    1,
-    'R'
-);
-
-$pdf->SetX(
-    $metax + 165
-);
-
-$pdf->Cell(
-    103,
-    4,
-    'Escopo: todas as atividades Feedback com NPS válido',
-    0,
-    1,
-    'R'
-);
-
-/*
- * KPI cards.
- */
-$cardy = 59.0;
-$cardgap = 5.0;
-$cardw = (273 - ($cardgap * 3)) / 4;
-$cardh = 25.0;
-
-$cards = [
-    [
-        'title' => 'NPS(%)',
-        'value' => $coursenps === null
-            ? '-'
-            : number_format(
-                $coursenps,
-                0,
-                ',',
-                '.'
-            ) . '%',
-        'detail' => 'promotores - detratores',
-        'color' => $primary,
-    ],
-    [
-        'title' => 'Promotores(%)',
-        'value' => number_format(
-            $promoterspct,
-            0,
-            ',',
-            '.'
-        ) . '%',
-        'detail' =>
-            $totalpromoters
-            . ' resposta(s)',
-        'color' => $goodcolor,
-    ],
-    [
-        'title' => 'Neutros(%)',
-        'value' => number_format(
-            $neutralspct,
-            0,
-            ',',
-            '.'
-        ) . '%',
-        'detail' =>
-            $totalneutrals
-            . ' resposta(s)',
-        'color' => $neutralcolor,
-    ],
-    [
-        'title' => 'Detratores(%)',
-        'value' => number_format(
-            $detractorspct,
-            0,
-            ',',
-            '.'
-        ) . '%',
-        'detail' =>
-            $totaldetractors
-            . ' resposta(s)',
-        'color' => $badcolor,
-    ],
-];
-
-foreach ($cards as $index => $card) {
-    local_feedbackdashboard_coursepdf_draw_card(
-        $pdf,
-        12
-            + (
-                $index
-                * ($cardw + $cardgap)
-            ),
-        $cardy,
-        $cardw,
-        $cardh,
-        $card['title'],
-        $card['value'],
-        $card['detail'],
-        $card['color'],
-        $dark,
-        $border
-    );
-}
-
-/*
- * Report explanation box.
- */
-$summaryx = 12.0;
-$summaryy = 92.0;
-$summaryw = 273.0;
-$summaryh = 84.0;
-
-local_feedbackdashboard_coursepdf_set_fill(
-    $pdf,
-    '#FFFFFF'
-);
-
-local_feedbackdashboard_coursepdf_set_draw(
-    $pdf,
-    $border
-);
-
-$pdf->RoundedRect(
-    $summaryx,
-    $summaryy,
-    $summaryw,
-    $summaryh,
-    1.2,
-    '1111',
-    'DF'
-);
-
-$pdf->SetFont(
-    'helvetica',
-    'B',
-    10
-);
-
-local_feedbackdashboard_coursepdf_set_text(
-    $pdf,
-    $dark
-);
-
-$pdf->SetXY(
-    $summaryx + 5,
-    $summaryy + 5
-);
-
-$pdf->Cell(
-    $summaryw - 10,
-    5,
-    'Resumo do relatório',
-    0,
-    1,
-    'L'
-);
-
-$pdf->SetFont(
-    'helvetica',
-    '',
-    8
-);
-
-local_feedbackdashboard_coursepdf_set_text(
-    $pdf,
-    '#536271'
-);
-
-$summarytext =
-    'Este relatório consolida os resultados de todas as atividades Feedback deste curso '
-    . 'que possuem uma pergunta NPS válida de 0 a 10. '
-    . 'O NPS do curso é calculado a partir do conjunto de todas as respostas NPS válidas, '
-    . 'e não pela média simples dos valores de NPS de cada atividade.'
-    . "\n\n"
-    . 'Nas páginas seguintes são apresentados:'
-    . "\n"
-    . '1. NPS por aula / Feedback, permitindo comparar o indicador entre as atividades.'
-    . "\n"
-    . '2. Número de respondentes por aula / Feedback, permitindo comparar o volume de respostas.'
-    . "\n\n"
-    . 'Critério NPS: notas 9-10 = Promotores; 7-8 = Neutros; 0-6 = Detratores.';
-
-$pdf->SetXY(
-    $summaryx + 5,
-    $summaryy + 14
-);
-
-$pdf->MultiCell(
-    $summaryw - 10,
-    5.2,
-    $summarytext,
-    0,
-    'L',
-    false,
-    1
-);
-
-/*
- * -------------------------------------------------------------------------
- * Chart pages.
- * -------------------------------------------------------------------------
- */
-
-if (!empty($feedbackrows)) {
-    /*
-     * 12 rows per chart page keeps labels and bars readable.
-     */
-    $chunks = array_chunk(
-        $feedbackrows,
-        12
-    );
-
-    $chunkcount = count($chunks);
-
-    foreach ($chunks as $index => $chunk) {
-        local_feedbackdashboard_coursepdf_draw_nps_chart_page(
-            $pdf,
-            $chunk,
-            format_string($course->fullname),
-            $primary,
-            $dark,
-            $light,
-            $border,
-            $logopath,
-            $index + 1,
-            $chunkcount
-        );
-    }
-
-    $maxresponses = 1;
-
-    foreach ($feedbackrows as $feedbackrow) {
-        $maxresponses = max(
-            $maxresponses,
-            (int) $feedbackrow['responses']
-        );
-    }
-
-    foreach ($chunks as $index => $chunk) {
-        local_feedbackdashboard_coursepdf_draw_response_chart_page(
-            $pdf,
-            $chunk,
-            format_string($course->fullname),
-            $maxresponses,
-            $primary,
-            $dark,
-            $light,
-            $border,
-            $logopath,
-            $index + 1,
-            $chunkcount
-        );
-    }
-} else {
-    /*
-     * The button normally appears only for courses with NPS Feedbacks,
-     * but keep a graceful fallback for direct access to this endpoint.
-     */
-    $pdf->SetFont(
-        'helvetica',
-        'B',
-        11
-    );
-
-    local_feedbackdashboard_coursepdf_set_text(
-        $pdf,
-        $dark
-    );
-
-    $pdf->SetXY(
-        20,
-        181
-    );
-
-    $pdf->Cell(
-        257,
-        6,
-        'Nenhuma atividade Feedback com pergunta NPS válida foi encontrada neste curso.',
+        'Escala em quantidade absoluta de respondentes',
         0,
         0,
         'C'
