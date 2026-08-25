@@ -246,23 +246,16 @@ function local_feedbackdashboard_pdf_draw_logo(pdf $pdf, ?string $logopath): voi
     $y = 12.0;
 
     $pdf->Image(
-        $logopath,
-        $x,
-        $y,
-        $width,
-        $height,
-        '',
-        '',
-        '',
-        true,
-        300,
-        '',
-        false,
-        false,
-        0,
-        true,
-        false,
-        false
+    $logopath,
+    $x,
+    $y,
+    $width,
+    $height,
+    '',
+    '',
+    '',
+    false,
+    300
     );
 }
 
