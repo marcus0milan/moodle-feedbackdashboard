@@ -39,8 +39,12 @@ require_capability(
  * -------------------------------------------------------------------------
  */
 
-$search = optional_param('search', '', PARAM_TEXT);
-$search = trim($search);
+$selectedcourseids = optional_param_array('courses', [], PARAM_INT);
+$selectedcourseids = array_values(
+    array_unique(
+        array_map('intval', $selectedcourseids)
+    )
+);
 
 $params = [
     'modname' => 'feedback',
@@ -50,15 +54,6 @@ $where = [
     'cm.deletioninprogress = 0',
 ];
 
-if ($search !== '') {
-    $params['searchcourse'] = '%' . $DB->sql_like_escape($search) . '%';
-
-    $where[] = $DB->sql_like(
-        'c.fullname',
-        ':searchcourse',
-        false
-    );
-}
 
 /*
  * -------------------------------------------------------------------------
@@ -171,6 +166,21 @@ foreach ($records as $record) {
 }
 
 /*
+ * Keep only course IDs that are actually available in this dashboard.
+ */
+$availablecourseids = array_map(
+    'intval',
+    array_keys($courses)
+);
+
+$selectedcourseids = array_values(
+    array_intersect(
+        $selectedcourseids,
+        $availablecourseids
+    )
+);
+
+/*
  * -------------------------------------------------------------------------
  * Build table rows and global totals.
  * -------------------------------------------------------------------------
@@ -187,6 +197,22 @@ $totalpassives = 0;
 $totaldetractors = 0;
 
 foreach ($courses as $coursedata) {
+
+    /*
+     * When courses are explicitly selected, only those courses
+     * contribute to the table and global dashboard indicators.
+     */
+    if (
+        !empty($selectedcourseids)
+        && !in_array(
+            (int) $coursedata['id'],
+            $selectedcourseids,
+            true
+        )
+    ) {
+        continue;
+    }
+
     /*
      * Combined course NPS.
      *
@@ -400,6 +426,475 @@ $globalnps = $totalvalidresponses > 0
     ) * 100
     : null;
 
+$coursefilterjavascript = <<<'JS'
+(function() {
+    'use strict';
+
+    const form = document.getElementById(
+        'feedbackdashboard-course-filter-form'
+    );
+
+    if (!form) {
+        return;
+    }
+
+    const picker = document.getElementById(
+        'feedbackdashboard-course-picker'
+    );
+
+    const searchInput = document.getElementById(
+        'feedbackdashboard-course-search'
+    );
+
+    const tagsContainer = document.getElementById(
+        'feedbackdashboard-selected-courses'
+    );
+
+    const hiddenInputs = document.getElementById(
+        'feedbackdashboard-selected-course-inputs'
+    );
+
+    const suggestions = document.getElementById(
+        'feedbackdashboard-course-suggestions'
+    );
+
+    const emptySuggestion = document.getElementById(
+        'feedbackdashboard-no-course-suggestion'
+    );
+
+    const clearButton = document.getElementById(
+        'feedbackdashboard-clear-selected-courses'
+    );
+
+    const selectionLive = document.getElementById(
+        'feedbackdashboard-course-selection-live'
+    );
+
+    const suggestionButtons = Array.from(
+        form.querySelectorAll(
+            '.feedbackdashboard-course-suggestion'
+        )
+    );
+
+    const selected = new Set();
+
+    if (tagsContainer) {
+        tagsContainer
+            .querySelectorAll(
+                '.feedbackdashboard-course-tag'
+            )
+            .forEach(function(tag) {
+                const courseid =
+                    String(tag.dataset.courseId || '');
+
+                if (courseid !== '') {
+                    selected.add(courseid);
+                }
+            });
+    }
+
+    const normalise = function(value) {
+        return (value || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toLocaleLowerCase();
+    };
+
+    const updateSelectionState = function() {
+        if (clearButton) {
+            clearButton.hidden = selected.size === 0;
+        }
+
+        if (selectionLive) {
+            if (selected.size === 0) {
+                selectionLive.textContent =
+                    'Todos os cursos com NPS serão considerados.';
+            } else if (selected.size === 1) {
+                selectionLive.textContent =
+                    '1 curso selecionado.';
+            } else {
+                selectionLive.textContent =
+                    selected.size + ' cursos selecionados.';
+            }
+        }
+
+        if (searchInput) {
+            searchInput.placeholder =
+                selected.size === 0
+                    ? 'Digite ou escolha um curso...'
+                    : 'Adicionar outro curso...';
+        }
+    };
+
+    const closeSuggestions = function() {
+        if (suggestions) {
+            suggestions.hidden = true;
+        }
+
+        if (searchInput) {
+            searchInput.setAttribute(
+                'aria-expanded',
+                'false'
+            );
+        }
+    };
+
+    const updateSuggestions = function() {
+        if (!suggestions || !searchInput) {
+            return;
+        }
+
+        const term = normalise(searchInput.value);
+        let visibleCount = 0;
+
+        suggestionButtons.forEach(function(button) {
+            const courseid =
+                String(button.dataset.courseId || '');
+
+            const coursename =
+                normalise(
+                    button.dataset.courseName || ''
+                );
+
+            const matchesText =
+                term === ''
+                || coursename.includes(term);
+
+            const matches =
+                matchesText
+                && !selected.has(courseid);
+
+            button.hidden = !matches;
+
+            if (matches) {
+                visibleCount++;
+            }
+        });
+
+        if (emptySuggestion) {
+            emptySuggestion.hidden =
+                visibleCount > 0;
+        }
+
+        suggestions.hidden = false;
+
+        searchInput.setAttribute(
+            'aria-expanded',
+            'true'
+        );
+    };
+
+    const createHiddenInput = function(courseid) {
+        if (!hiddenInputs) {
+            return;
+        }
+
+        const input = document.createElement('input');
+
+        input.type = 'hidden';
+        input.name = 'courses[]';
+        input.value = courseid;
+        input.dataset.courseId = courseid;
+
+        hiddenInputs.appendChild(input);
+    };
+
+    const removeHiddenInput = function(courseid) {
+        if (!hiddenInputs) {
+            return;
+        }
+
+        const inputs = Array.from(
+            hiddenInputs.querySelectorAll(
+                'input[name="courses[]"]'
+            )
+        );
+
+        const input = inputs.find(function(current) {
+            return String(
+                current.dataset.courseId
+                || current.value
+            ) === courseid;
+        });
+
+        if (input) {
+            input.remove();
+        }
+    };
+
+    const createTag = function(
+        courseid,
+        coursename
+    ) {
+        if (!tagsContainer) {
+            return;
+        }
+
+        const tag = document.createElement('span');
+
+        tag.className =
+            'feedbackdashboard-course-tag';
+
+        tag.dataset.courseId = courseid;
+
+        const label =
+            document.createElement('span');
+
+        label.className =
+            'feedbackdashboard-course-tag-label';
+
+        label.textContent = coursename;
+
+        const remove =
+            document.createElement('button');
+
+        remove.type = 'button';
+
+        remove.className =
+            'feedbackdashboard-course-tag-remove';
+
+        remove.dataset.courseId = courseid;
+
+        remove.title = 'Remover curso';
+
+        remove.setAttribute(
+            'aria-label',
+            'Remover ' + coursename
+        );
+
+        remove.textContent = '×';
+
+        tag.appendChild(label);
+        tag.appendChild(remove);
+
+        tagsContainer.appendChild(tag);
+    };
+
+    const addCourse = function(
+        courseid,
+        coursename
+    ) {
+        courseid = String(courseid || '');
+
+        if (
+            courseid === ''
+            || selected.has(courseid)
+        ) {
+            return;
+        }
+
+        selected.add(courseid);
+
+        createTag(
+            courseid,
+            coursename
+        );
+
+        createHiddenInput(courseid);
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+
+        updateSelectionState();
+        updateSuggestions();
+    };
+
+    const removeCourse = function(courseid) {
+        courseid = String(courseid || '');
+
+        if (
+            courseid === ''
+            || !selected.has(courseid)
+        ) {
+            return;
+        }
+
+        selected.delete(courseid);
+
+        if (tagsContainer) {
+            const tags = Array.from(
+                tagsContainer.querySelectorAll(
+                    '.feedbackdashboard-course-tag'
+                )
+            );
+
+            const tag = tags.find(function(current) {
+                return String(
+                    current.dataset.courseId || ''
+                ) === courseid;
+            });
+
+            if (tag) {
+                tag.remove();
+            }
+        }
+
+        removeHiddenInput(courseid);
+
+        updateSelectionState();
+
+        if (searchInput) {
+            searchInput.focus();
+        }
+
+        updateSuggestions();
+    };
+
+    const clearCourses = function() {
+        selected.clear();
+
+        if (tagsContainer) {
+            tagsContainer.innerHTML = '';
+        }
+
+        if (hiddenInputs) {
+            hiddenInputs.innerHTML = '';
+        }
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+
+        updateSelectionState();
+        updateSuggestions();
+    };
+
+    suggestionButtons.forEach(function(button) {
+        button.addEventListener(
+            'click',
+            function() {
+                addCourse(
+                    String(
+                        button.dataset.courseId || ''
+                    ),
+                    String(
+                        button.dataset.courseName || ''
+                    )
+                );
+            }
+        );
+    });
+
+    if (tagsContainer) {
+        tagsContainer.addEventListener(
+            'click',
+            function(event) {
+                const removeButton =
+                    event.target.closest(
+                        '.feedbackdashboard-course-tag-remove'
+                    );
+
+                if (!removeButton) {
+                    return;
+                }
+
+                removeCourse(
+                    String(
+                        removeButton.dataset.courseId
+                        || ''
+                    )
+                );
+            }
+        );
+    }
+
+    if (clearButton) {
+        clearButton.addEventListener(
+            'click',
+            clearCourses
+        );
+    }
+
+    if (searchInput) {
+        searchInput.addEventListener(
+            'input',
+            updateSuggestions
+        );
+
+        searchInput.addEventListener(
+            'focus',
+            updateSuggestions
+        );
+
+        searchInput.addEventListener(
+            'keydown',
+            function(event) {
+
+                if (
+                    event.key === 'Backspace'
+                    && searchInput.value === ''
+                    && tagsContainer
+                ) {
+                    const tags =
+                        tagsContainer.querySelectorAll(
+                            '.feedbackdashboard-course-tag'
+                        );
+
+                    const lastTag =
+                        tags.length > 0
+                            ? tags[tags.length - 1]
+                            : null;
+
+                    if (lastTag) {
+                        removeCourse(
+                            String(
+                                lastTag.dataset.courseId
+                                || ''
+                            )
+                        );
+                    }
+                }
+
+                if (event.key === 'Escape') {
+                    closeSuggestions();
+                }
+
+                if (
+                    event.key === 'Enter'
+                    && suggestions
+                    && !suggestions.hidden
+                ) {
+                    const firstVisible =
+                        suggestionButtons.find(
+                            function(button) {
+                                return !button.hidden;
+                            }
+                        );
+
+                    if (firstVisible) {
+                        event.preventDefault();
+                        firstVisible.click();
+                    }
+                }
+            }
+        );
+    }
+
+    document.addEventListener(
+        'click',
+        function(event) {
+            if (
+                picker
+                && !picker.contains(event.target)
+            ) {
+                closeSuggestions();
+            }
+        }
+    );
+
+    updateSelectionState();
+})();
+JS;
+
+$PAGE->requires->js_init_code(
+    $coursefilterjavascript
+);
+
+
 /*
  * -------------------------------------------------------------------------
  * Output.
@@ -407,6 +902,174 @@ $globalnps = $totalvalidresponses > 0
  */
 
 echo $OUTPUT->header();
+
+$coursefiltercss = '
+.feedbackdashboard-course-filter {
+    max-width:100%;
+}
+
+.feedbackdashboard-course-picker {
+    position:relative;
+}
+
+.feedbackdashboard-course-picker-box {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:.4rem;
+    min-height:46px;
+    padding:.38rem .5rem;
+    background:#fff;
+    border:1px solid #ced4da;
+    border-radius:.45rem;
+    transition:border-color .15s ease, box-shadow .15s ease;
+}
+
+.feedbackdashboard-course-picker-box:focus-within {
+    border-color:var(--bs-primary, #0f6cbf);
+    box-shadow:0 0 0 .18rem rgba(15,108,191,.15);
+}
+
+.feedbackdashboard-selected-courses {
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:.35rem;
+}
+
+.feedbackdashboard-course-tag {
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+    max-width:100%;
+    padding:.28rem .42rem .28rem .58rem;
+    border:1px solid #cbd5e1;
+    border-radius:.38rem;
+    background:#f1f5f9;
+    color:#263746;
+    font-size:.82rem;
+    font-weight:600;
+    line-height:1.25;
+}
+
+.feedbackdashboard-course-tag-label {
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    max-width:360px;
+}
+
+.feedbackdashboard-course-tag-remove {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    width:20px;
+    height:20px;
+    padding:0;
+    border:0;
+    border-radius:50%;
+    background:transparent;
+    color:#263746;
+    font-size:1rem;
+    font-weight:700;
+    line-height:1;
+    cursor:pointer;
+}
+
+.feedbackdashboard-course-tag-remove:hover,
+.feedbackdashboard-course-tag-remove:focus {
+    background:#e2e8f0;
+    outline:0;
+}
+
+.feedbackdashboard-course-search-input {
+    flex:1 1 280px;
+    min-width:220px;
+    height:32px;
+    padding:.2rem .25rem;
+    border:0 !important;
+    outline:0 !important;
+    box-shadow:none !important;
+    background:transparent;
+}
+
+.feedbackdashboard-course-suggestions {
+    position:absolute;
+    z-index:1050;
+    top:calc(100% + .3rem);
+    left:0;
+    right:0;
+    max-height:300px;
+    overflow-y:auto;
+    padding:.3rem;
+    background:#fff;
+    border:1px solid #ced4da;
+    border-radius:.45rem;
+    box-shadow:0 .45rem 1.1rem rgba(15,23,42,.14);
+}
+
+.feedbackdashboard-course-suggestion {
+    display:block;
+    width:100%;
+    padding:.58rem .7rem;
+    border:0;
+    border-radius:.3rem;
+    background:#fff;
+    color:#263746;
+    text-align:left;
+    cursor:pointer;
+}
+
+.feedbackdashboard-course-suggestion:hover,
+.feedbackdashboard-course-suggestion:focus {
+    background:#f1f5f9;
+    outline:0;
+}
+
+.feedbackdashboard-course-suggestion-name {
+    display:block;
+    font-size:.88rem;
+    font-weight:600;
+}
+
+.feedbackdashboard-course-picker-empty {
+    padding:.7rem;
+    color:#637083;
+    font-size:.82rem;
+}
+
+.feedbackdashboard-course-picker-help {
+    margin-top:.45rem;
+    color:#637083;
+    font-size:.76rem;
+    line-height:1.4;
+}
+
+.feedbackdashboard-course-selection-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:.75rem;
+    margin-top:.6rem;
+}
+
+.feedbackdashboard-course-selection-live {
+    color:#637083;
+    font-size:.76rem;
+}
+
+@media (max-width:767.98px) {
+    .feedbackdashboard-course-selection-row {
+        align-items:flex-start;
+        flex-direction:column;
+    }
+}
+';
+
+echo html_writer::tag(
+    'style',
+    $coursefiltercss
+);
 
 echo $OUTPUT->heading(
     get_string(
@@ -428,70 +1091,324 @@ echo html_writer::tag(
 
 /*
  * -------------------------------------------------------------------------
- * Course search.
+ * Course filter.
  * -------------------------------------------------------------------------
  */
 
 echo html_writer::start_tag('form', [
+    'id' => 'feedbackdashboard-course-filter-form',
     'method' => 'get',
     'action' => (
         new moodle_url(
             '/local/feedbackdashboard/admin.php'
         )
     )->out(false),
-    'class' => 'feedbackdashboard-admin-search mb-4',
+    'class' => 'feedbackdashboard-course-filter mb-4',
+    'autocomplete' => 'off',
 ]);
 
 echo html_writer::tag(
     'label',
-    get_string(
-        'searchcourses',
-        'local_feedbackdashboard'
-    ),
+    'Filtrar cursos',
     [
-        'for' => 'feedbackdashboard-admin-search',
-        'class' => 'visually-hidden',
+        'for' => 'feedbackdashboard-course-search',
+        'class' => 'form-label fw-semibold mb-2',
     ]
 );
 
-echo html_writer::empty_tag('input', [
-    'type' => 'search',
-    'id' => 'feedbackdashboard-admin-search',
-    'name' => 'search',
-    'value' => $search,
-    'class' => 'form-control',
-    'placeholder' => get_string(
-        'searchcourses',
-        'local_feedbackdashboard'
-    ),
-]);
+/*
+ * Search box and selected course tags.
+ */
+echo html_writer::start_div(
+    'feedbackdashboard-course-picker',
+    [
+        'id' => 'feedbackdashboard-course-picker',
+    ]
+);
+
+echo html_writer::start_div(
+    'feedbackdashboard-course-picker-box'
+);
+
+echo html_writer::start_div(
+    'feedbackdashboard-selected-courses',
+    [
+        'id' => 'feedbackdashboard-selected-courses',
+    ]
+);
+
+/*
+ * Selected courses displayed as tags.
+ */
+foreach ($selectedcourseids as $selectedcourseid) {
+
+    if (!isset($courses[$selectedcourseid])) {
+        continue;
+    }
+
+    $selectedcourse = $courses[$selectedcourseid];
+
+    echo html_writer::start_tag(
+        'span',
+        [
+            'class' =>
+                'feedbackdashboard-course-tag',
+
+            'data-course-id' =>
+                $selectedcourseid,
+        ]
+    );
+
+    echo html_writer::span(
+        s(format_string($selectedcourse['name'])),
+        'feedbackdashboard-course-tag-label'
+    );
+
+    echo html_writer::tag(
+        'button',
+        '×',
+        [
+            'type' => 'button',
+
+            'class' =>
+                'feedbackdashboard-course-tag-remove',
+
+            'data-course-id' =>
+                $selectedcourseid,
+
+            'title' =>
+                'Remover curso',
+
+            'aria-label' =>
+                'Remover '
+                . format_string(
+                    $selectedcourse['name']
+                ),
+        ]
+    );
+
+    echo html_writer::end_tag('span');
+}
+
+echo html_writer::end_div();
+
+/*
+ * Course search input.
+ */
+echo html_writer::empty_tag(
+    'input',
+    [
+        'type' => 'search',
+
+        'id' =>
+            'feedbackdashboard-course-search',
+
+        'class' =>
+            'feedbackdashboard-course-search-input',
+
+        'placeholder' =>
+            empty($selectedcourseids)
+                ? 'Digite ou escolha um curso...'
+                : 'Adicionar outro curso...',
+
+        'aria-autocomplete' => 'list',
+        'aria-expanded' => 'false',
+
+        'aria-controls' =>
+            'feedbackdashboard-course-suggestions',
+    ]
+);
+
+echo html_writer::end_div();
+
+/*
+ * Hidden inputs submitted to PHP.
+ */
+echo html_writer::start_div(
+    '',
+    [
+        'id' =>
+            'feedbackdashboard-selected-course-inputs',
+    ]
+);
+
+foreach ($selectedcourseids as $selectedcourseid) {
+
+    if (!isset($courses[$selectedcourseid])) {
+        continue;
+    }
+
+    echo html_writer::empty_tag(
+        'input',
+        [
+            'type' => 'hidden',
+            'name' => 'courses[]',
+            'value' => $selectedcourseid,
+
+            'data-course-id' =>
+                $selectedcourseid,
+        ]
+    );
+}
+
+echo html_writer::end_div();
+
+/*
+ * Dropdown course options.
+ */
+echo html_writer::start_div(
+    'feedbackdashboard-course-suggestions',
+    [
+        'id' =>
+            'feedbackdashboard-course-suggestions',
+
+        'role' => 'listbox',
+        'hidden' => 'hidden',
+    ]
+);
+
+foreach ($courses as $availablecourse) {
+
+    $coursename =
+        format_string(
+            $availablecourse['name']
+        );
+
+    echo html_writer::tag(
+        'button',
+
+        html_writer::span(
+            s($coursename),
+            'feedbackdashboard-course-suggestion-name'
+        ),
+
+        [
+            'type' => 'button',
+
+            'class' =>
+                'feedbackdashboard-course-suggestion',
+
+            'data-course-id' =>
+                $availablecourse['id'],
+
+            'data-course-name' =>
+                $coursename,
+
+            'role' => 'option',
+        ]
+    );
+}
+
+echo html_writer::div(
+    'Nenhum curso encontrado.',
+    'feedbackdashboard-course-picker-empty',
+    [
+        'id' =>
+            'feedbackdashboard-no-course-suggestion',
+
+        'hidden' => 'hidden',
+    ]
+);
+
+echo html_writer::end_div();
+echo html_writer::end_div();
+
+/*
+ * Current selection status.
+ */
+echo html_writer::start_div(
+    'feedbackdashboard-course-selection-row'
+);
+
+echo html_writer::tag(
+    'div',
+
+    empty($selectedcourseids)
+        ? 'Todos os cursos com NPS serão considerados.'
+        : (
+            count($selectedcourseids) === 1
+                ? '1 curso selecionado.'
+                : count($selectedcourseids)
+                    . ' cursos selecionados.'
+        ),
+
+    [
+        'id' =>
+            'feedbackdashboard-course-selection-live',
+
+        'class' =>
+            'feedbackdashboard-course-selection-live',
+
+        'role' => 'status',
+        'aria-live' => 'polite',
+    ]
+);
+
+$clearcourseattributes = [
+    'type' => 'button',
+
+    'id' =>
+        'feedbackdashboard-clear-selected-courses',
+
+    'class' =>
+        'btn btn-sm btn-outline-secondary',
+];
+
+if (empty($selectedcourseids)) {
+    $clearcourseattributes['hidden'] = 'hidden';
+}
 
 echo html_writer::tag(
     'button',
-    get_string(
-        'search',
-        'local_feedbackdashboard'
-    ),
+    'Limpar seleção',
+    $clearcourseattributes
+);
+
+echo html_writer::end_div();
+
+echo html_writer::tag(
+    'div',
+    'Clique na caixa para visualizar os cursos disponíveis '
+        . 'ou digite parte do nome. Você pode selecionar '
+        . 'um ou vários cursos.',
+    [
+        'class' =>
+            'feedbackdashboard-course-picker-help',
+    ]
+);
+
+/*
+ * Filter actions.
+ */
+echo html_writer::start_div(
+    'd-flex align-items-center flex-wrap gap-2 mt-3'
+);
+
+echo html_writer::tag(
+    'button',
+    'Aplicar filtro',
     [
         'type' => 'submit',
         'class' => 'btn btn-primary',
     ]
 );
 
-if ($search !== '') {
+if (!empty($selectedcourseids)) {
+
     echo html_writer::link(
         new moodle_url(
             '/local/feedbackdashboard/admin.php'
         ),
-        get_string(
-            'clear',
-            'local_feedbackdashboard'
-        ),
+
+        'Limpar filtro',
+
         [
             'class' => 'btn btn-secondary',
         ]
     );
 }
+
+echo html_writer::end_div();
 
 echo html_writer::end_tag('form');
 
