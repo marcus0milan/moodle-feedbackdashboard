@@ -116,9 +116,30 @@ foreach ($records as $record) {
 
     $summary = nps_service::get_summary($feedback);
 
-    if (!$summary['hasnps']) {
+if (!$summary['hasnps']) {
     continue;
-    }
+}
+
+/*
+ * Activity available in the course filter.
+ */
+$activityid = (int) $record->cmid;
+
+$availableactivities[$activityid] = [
+    'id' => $activityid,
+    'name' => format_string($record->feedbackname),
+];
+
+/*
+ * When activities are selected, only those activities contribute
+ * to the table and course indicators.
+ */
+if (
+    !empty($selectedactivityids)
+    && !in_array($activityid, $selectedactivityids, true)
+) {
+    continue;
+}
 
     $totalsurveys++;
     $totalresponses += $summary['totalresponses'];
