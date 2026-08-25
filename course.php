@@ -701,43 +701,317 @@ echo html_writer::tag(
     ['class' => 'text-muted mb-4']
 );
 
-// Search form (Pesquisar)
+// Activity Feedback filter.
 echo html_writer::start_tag('form', [
+    'id' => 'feedbackdashboard-activity-filter-form',
     'method' => 'get',
-    'action' => (new moodle_url('/local/feedbackdashboard/course.php'))->out(false),
-    'class' => 'feedbackdashboard-admin-search mb-4',
+    'action' => (
+        new moodle_url(
+            '/local/feedbackdashboard/course.php'
+        )
+    )->out(false),
+    'class' => 'feedbackdashboard-activity-filter mb-4',
+    'autocomplete' => 'off',
 ]);
-echo html_writer::tag('label', get_string('searchfeedbacks', 'local_feedbackdashboard'), [
-    'for' => 'feedbackdashboard-admin-search',
-    'class' => 'visually-hidden',
-]);
+
 echo html_writer::empty_tag('input', [
     'type' => 'hidden',
     'name' => 'id',
     'value' => $courseid,
 ]);
 
-echo html_writer::empty_tag('input', [
-    'type' => 'search',
-    'id' => 'feedbackdashboard-admin-search',
-    'name' => 'search',
-    'value' => $search,
-    'class' => 'form-control',
-    'placeholder' => get_string('searchfeedbacks', 'local_feedbackdashboard'),
-]);
-echo html_writer::tag('button', get_string('search', 'local_feedbackdashboard'), [
-    'type' => 'submit',
-    'class' => 'btn btn-primary',
-]);
-if ($search !== '') {
-    echo html_writer::link(
-        new moodle_url('/local/feedbackdashboard/course.php', [
-    'id' => $courseid,
-]),
-        get_string('clear', 'local_feedbackdashboard'),
-        ['class' => 'btn btn-secondary']
+echo html_writer::tag(
+    'label',
+    'Filtrar atividades de Feedback',
+    [
+        'for' => 'feedbackdashboard-activity-search',
+        'class' => 'form-label fw-semibold mb-2',
+    ]
+);
+
+echo html_writer::start_div(
+    'feedbackdashboard-activity-picker',
+    [
+        'id' => 'feedbackdashboard-activity-picker',
+    ]
+);
+
+/*
+ * Search field and selected activity tags.
+ */
+echo html_writer::start_div(
+    'feedbackdashboard-activity-picker-box'
+);
+
+echo html_writer::start_div(
+    'feedbackdashboard-selected-activities',
+    [
+        'id' => 'feedbackdashboard-selected-activities',
+    ]
+);
+
+foreach ($selectedactivityids as $selectedactivityid) {
+    if (
+        !isset(
+            $availableactivities[$selectedactivityid]
+        )
+    ) {
+        continue;
+    }
+
+    $selectedactivity =
+        $availableactivities[$selectedactivityid];
+
+    echo html_writer::start_tag(
+        'span',
+        [
+            'class' =>
+                'feedbackdashboard-activity-tag',
+
+            'data-activity-id' =>
+                $selectedactivityid,
+        ]
+    );
+
+    echo html_writer::span(
+        s($selectedactivity['name']),
+        'feedbackdashboard-activity-tag-label'
+    );
+
+    echo html_writer::tag(
+        'button',
+        '×',
+        [
+            'type' => 'button',
+
+            'class' =>
+                'feedbackdashboard-activity-tag-remove',
+
+            'data-activity-id' =>
+                $selectedactivityid,
+
+            'title' =>
+                'Remover atividade',
+
+            'aria-label' =>
+                'Remover '
+                . $selectedactivity['name'],
+        ]
+    );
+
+    echo html_writer::end_tag('span');
+}
+
+echo html_writer::end_div();
+
+echo html_writer::empty_tag(
+    'input',
+    [
+        'type' => 'search',
+
+        'id' =>
+            'feedbackdashboard-activity-search',
+
+        'class' =>
+            'feedbackdashboard-activity-search-input',
+
+        'placeholder' =>
+            empty($selectedactivityids)
+                ? 'Digite ou escolha uma atividade...'
+                : 'Adicionar outra atividade...',
+
+        'aria-autocomplete' => 'list',
+        'aria-expanded' => 'false',
+
+        'aria-controls' =>
+            'feedbackdashboard-activity-suggestions',
+    ]
+);
+
+echo html_writer::end_div();
+
+/*
+ * Selected activity IDs submitted to PHP.
+ */
+echo html_writer::start_div(
+    '',
+    [
+        'id' =>
+            'feedbackdashboard-selected-activity-inputs',
+    ]
+);
+
+foreach ($selectedactivityids as $selectedactivityid) {
+    if (
+        !isset(
+            $availableactivities[$selectedactivityid]
+        )
+    ) {
+        continue;
+    }
+
+    echo html_writer::empty_tag(
+        'input',
+        [
+            'type' => 'hidden',
+            'name' => 'activities[]',
+            'value' => $selectedactivityid,
+
+            'data-activity-id' =>
+                $selectedactivityid,
+        ]
     );
 }
+
+echo html_writer::end_div();
+
+/*
+ * Dropdown options.
+ */
+echo html_writer::start_div(
+    'feedbackdashboard-activity-suggestions',
+    [
+        'id' =>
+            'feedbackdashboard-activity-suggestions',
+
+        'role' => 'listbox',
+        'hidden' => 'hidden',
+    ]
+);
+
+foreach ($availableactivities as $activity) {
+    echo html_writer::tag(
+        'button',
+        html_writer::span(
+            s($activity['name']),
+            'feedbackdashboard-activity-suggestion-name'
+        ),
+        [
+            'type' => 'button',
+
+            'class' =>
+                'feedbackdashboard-activity-suggestion',
+
+            'data-activity-id' =>
+                $activity['id'],
+
+            'data-activity-name' =>
+                $activity['name'],
+
+            'role' => 'option',
+        ]
+    );
+}
+
+echo html_writer::div(
+    'Nenhuma atividade encontrada.',
+    'feedbackdashboard-activity-picker-empty',
+    [
+        'id' =>
+            'feedbackdashboard-no-activity-suggestion',
+
+        'hidden' => 'hidden',
+    ]
+);
+
+echo html_writer::end_div();
+echo html_writer::end_div();
+
+/*
+ * Selection information.
+ */
+echo html_writer::start_div(
+    'feedbackdashboard-activity-selection-row'
+);
+
+echo html_writer::tag(
+    'div',
+    empty($selectedactivityids)
+        ? 'Todas as atividades com NPS serão consideradas.'
+        : (
+            count($selectedactivityids) === 1
+                ? '1 atividade selecionada.'
+                : count($selectedactivityids)
+                    . ' atividades selecionadas.'
+        ),
+    [
+        'id' =>
+            'feedbackdashboard-activity-selection-live',
+
+        'class' =>
+            'feedbackdashboard-activity-selection-live',
+
+        'role' => 'status',
+        'aria-live' => 'polite',
+    ]
+);
+
+$clearactivityattributes = [
+    'type' => 'button',
+
+    'id' =>
+        'feedbackdashboard-clear-selected-activities',
+
+    'class' =>
+        'btn btn-sm btn-outline-secondary',
+];
+
+if (empty($selectedactivityids)) {
+    $clearactivityattributes['hidden'] = 'hidden';
+}
+
+echo html_writer::tag(
+    'button',
+    'Limpar seleção',
+    $clearactivityattributes
+);
+
+echo html_writer::end_div();
+
+echo html_writer::tag(
+    'div',
+    'Clique na caixa para visualizar as atividades disponíveis '
+        . 'ou digite parte do nome. Você pode selecionar uma '
+        . 'ou várias atividades.',
+    [
+        'class' =>
+            'feedbackdashboard-activity-picker-help',
+    ]
+);
+
+/*
+ * Filter actions.
+ */
+echo html_writer::start_div(
+    'd-flex align-items-center flex-wrap gap-2 mt-3'
+);
+
+echo html_writer::tag(
+    'button',
+    'Aplicar filtro',
+    [
+        'type' => 'submit',
+        'class' => 'btn btn-primary',
+    ]
+);
+
+if (!empty($selectedactivityids)) {
+    echo html_writer::link(
+        new moodle_url(
+            '/local/feedbackdashboard/course.php',
+            [
+                'id' => $courseid,
+            ]
+        ),
+        'Limpar filtro',
+        [
+            'class' => 'btn btn-secondary',
+        ]
+    );
+}
+
+echo html_writer::end_div();
+
 echo html_writer::end_tag('form');
 
 // KPI cards.
