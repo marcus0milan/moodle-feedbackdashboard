@@ -705,6 +705,7 @@ $filterjavascript = <<<'JS'
     'use strict';
 
     const form = document.getElementById('feedbackdashboard-filter-form');
+
     if (!form) {
         return;
     }
@@ -715,13 +716,12 @@ $filterjavascript = <<<'JS'
     const tagsContainer = document.getElementById('feedbackdashboard-selected-users');
     const hiddenInputs = document.getElementById('feedbackdashboard-selected-user-inputs');
     const suggestions = document.getElementById('feedbackdashboard-user-suggestions');
+    const emptySuggestion = document.getElementById('feedbackdashboard-no-user-suggestion');
+    const clearUsersButton = document.getElementById('feedbackdashboard-clear-selected-users');
+    const selectionLive = document.getElementById('feedbackdashboard-selection-live');
 
     const suggestionButtons = Array.from(
         form.querySelectorAll('.feedbackdashboard-user-suggestion')
-    );
-
-    const emptySuggestion = document.getElementById(
-        'feedbackdashboard-no-user-suggestion'
     );
 
     const selected = new Set();
@@ -730,7 +730,11 @@ $filterjavascript = <<<'JS'
         tagsContainer
             .querySelectorAll('.feedbackdashboard-user-tag')
             .forEach(function(tag) {
-                selected.add(String(tag.dataset.userId || ''));
+                const userid = String(tag.dataset.userId || '');
+
+                if (userid !== '') {
+                    selected.add(userid);
+                }
             });
     }
 
@@ -738,9 +742,35 @@ $filterjavascript = <<<'JS'
         return (value || '').trim().toLocaleLowerCase();
     };
 
+    const updateSelectionState = function() {
+        if (clearUsersButton) {
+            clearUsersButton.hidden = selected.size === 0;
+        }
+
+        if (selectionLive) {
+            if (selected.size === 0) {
+                selectionLive.textContent = selectionLive.dataset.emptyText || '';
+            } else if (selected.size === 1) {
+                selectionLive.textContent = '1 aluno específico selecionado.';
+            } else {
+                selectionLive.textContent = selected.size + ' alunos específicos selecionados.';
+            }
+        }
+
+        if (searchInput) {
+            searchInput.placeholder = selected.size === 0
+                ? 'Digite ou escolha um aluno...'
+                : 'Adicionar outro aluno...';
+        }
+    };
+
     const closeSuggestions = function() {
         if (suggestions) {
             suggestions.hidden = true;
+        }
+
+        if (searchInput) {
+            searchInput.setAttribute('aria-expanded', 'false');
         }
     };
 
@@ -750,20 +780,20 @@ $filterjavascript = <<<'JS'
         }
 
         const term = normalise(searchInput.value);
-
-        if (term === '') {
-            closeSuggestions();
-            return;
-        }
-
         let visibleCount = 0;
 
         suggestionButtons.forEach(function(button) {
             const userid = String(button.dataset.userId || '');
             const username = normalise(button.dataset.userName || '');
+            const useremail = normalise(button.dataset.userEmail || '');
+
+            const matchesText =
+                term === ''
+                || username.includes(term)
+                || useremail.includes(term);
 
             const matches =
-                username.includes(term)
+                matchesText
                 && !selected.has(userid);
 
             button.hidden = !matches;
@@ -778,6 +808,7 @@ $filterjavascript = <<<'JS'
         }
 
         suggestions.hidden = false;
+        searchInput.setAttribute('aria-expanded', 'true');
     };
 
     const createHiddenInput = function(userid) {
@@ -821,26 +852,22 @@ $filterjavascript = <<<'JS'
         }
 
         const tag = document.createElement('span');
-
         tag.className = 'feedbackdashboard-user-tag';
         tag.dataset.userId = userid;
 
         const label = document.createElement('span');
-
         label.className = 'feedbackdashboard-user-tag-label';
         label.textContent = username;
 
         const remove = document.createElement('button');
-
         remove.type = 'button';
         remove.className = 'feedbackdashboard-user-tag-remove';
         remove.dataset.userId = userid;
+        remove.title = 'Remover aluno';
         remove.setAttribute(
             'aria-label',
             'Remover ' + username
         );
-
-        remove.title = 'Remover aluno';
         remove.textContent = '×';
 
         tag.appendChild(label);
@@ -873,7 +900,8 @@ $filterjavascript = <<<'JS'
             searchInput.focus();
         }
 
-        closeSuggestions();
+        updateSelectionState();
+        updateSuggestions();
     };
 
     const removeUser = function(userid) {
@@ -907,13 +935,40 @@ $filterjavascript = <<<'JS'
         }
 
         removeHiddenInput(userid);
-        updateSuggestions();
+        updateSelectionState();
 
         if (searchInput) {
             searchInput.focus();
         }
+
+        updateSuggestions();
     };
 
+    const clearSelectedUsers = function() {
+        selected.clear();
+
+        if (tagsContainer) {
+            tagsContainer.innerHTML = '';
+        }
+
+        if (hiddenInputs) {
+            hiddenInputs.innerHTML = '';
+        }
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.focus();
+        }
+
+        updateSelectionState();
+        updateSuggestions();
+    };
+
+    /*
+     * The responder list is generated on the server according to the selected
+     * Moodle group. Changing the group refreshes the page and clears any
+     * individual student selection from the previous group.
+     */
     if (groupSelect) {
         groupSelect.addEventListener(
             'change',
@@ -959,6 +1014,13 @@ $filterjavascript = <<<'JS'
         );
     }
 
+    if (clearUsersButton) {
+        clearUsersButton.addEventListener(
+            'click',
+            clearSelectedUsers
+        );
+    }
+
     if (searchInput) {
         searchInput.addEventListener(
             'input',
@@ -967,13 +1029,7 @@ $filterjavascript = <<<'JS'
 
         searchInput.addEventListener(
             'focus',
-            function() {
-                if (
-                    searchInput.value.trim() !== ''
-                ) {
-                    updateSuggestions();
-                }
-            }
+            updateSuggestions
         );
 
         searchInput.addEventListener(
@@ -1037,6 +1093,8 @@ $filterjavascript = <<<'JS'
             }
         }
     );
+
+    updateSelectionState();
 })();
 JS;
 
@@ -1052,6 +1110,175 @@ echo $OUTPUT->header();
 
 // Lightweight dashboard styling. Theme colours are injected from Moodle configuration.
 $dashboardcss = '
+.feedbackdashboard-report {
+    background:' . $light . ';
+    border-top:5px solid ' . $primary . ';
+    padding:1.5rem;
+    border-radius:.35rem;
+}
+
+.feedbackdashboard-meta {
+    background:#fff;
+    border:1px solid ' . $border . ';
+    padding:.75rem 1rem;
+    margin-bottom:1rem;
+}
+
+.feedbackdashboard-card {
+    background:#fff;
+    border:1px solid ' . $border . ';
+    border-radius:.25rem;
+    height:100%;
+    position:relative;
+    overflow:hidden;
+}
+
+.feedbackdashboard-card::before {
+    content:"";
+    display:block;
+    height:4px;
+    background:var(--card-accent,' . $primary . ');
+}
+
+.feedbackdashboard-card-body {
+    padding:.65rem .75rem .8rem;
+    text-align:center;
+}
+
+.feedbackdashboard-card-title {
+    font-weight:600;
+    color:#536271;
+    font-size:.88rem;
+}
+
+.feedbackdashboard-card-value {
+    font-size:1.9rem;
+    line-height:1.15;
+    font-weight:700;
+    color:' . $dark . ';
+    margin:.2rem 0;
+}
+
+.feedbackdashboard-card-detail {
+    color:#637083;
+    font-size:.78rem;
+}
+
+.feedbackdashboard-chartbox {
+    background:#fff;
+    border:1px solid ' . $border . ';
+    border-radius:.25rem;
+    padding:1rem;
+    height:100%;
+}
+
+/* Participant filter. */
+.feedbackdashboard-filter-card {
+    border:1px solid ' . $border . ';
+    border-radius:.55rem;
+    overflow:visible;
+}
+
+.feedbackdashboard-filter-section {
+    background:#fff;
+    border:1px solid ' . $border . ';
+    border-radius:.5rem;
+    padding:1rem;
+    height:100%;
+}
+
+.feedbackdashboard-filter-section-soft {
+    background:' . $light . ';
+}
+
+.feedbackdashboard-filter-section-heading {
+    display:flex;
+    align-items:flex-start;
+    gap:.65rem;
+    margin-bottom:1rem;
+}
+
+.feedbackdashboard-filter-step {
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 26px;
+    width:26px;
+    height:26px;
+    border-radius:50%;
+    background:' . $primary . ';
+    color:#fff;
+    font-size:.78rem;
+    font-weight:700;
+}
+
+.feedbackdashboard-filter-section-title {
+    margin:0;
+    color:' . $dark . ';
+    font-size:.95rem;
+    font-weight:700;
+    line-height:1.25;
+}
+
+.feedbackdashboard-filter-section-subtitle {
+    margin:.15rem 0 0;
+    color:#637083;
+    font-size:.78rem;
+    line-height:1.4;
+}
+
+.feedbackdashboard-filter-label {
+    font-weight:600;
+    color:' . $dark . ';
+    margin-bottom:.35rem;
+}
+
+.feedbackdashboard-filter-help {
+    margin-top:.4rem;
+    color:#637083;
+    font-size:.76rem;
+    line-height:1.4;
+}
+
+.feedbackdashboard-filter-scope {
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:1rem;
+    padding:.65rem .75rem;
+    margin-bottom:.85rem;
+    border:1px solid ' . $border . ';
+    border-radius:.4rem;
+    background:' . $light . ';
+}
+
+.feedbackdashboard-filter-scope-label {
+    display:block;
+    margin-bottom:.1rem;
+    color:#637083;
+    font-size:.72rem;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:.02em;
+}
+
+.feedbackdashboard-filter-scope-value {
+    color:' . $dark . ';
+    font-size:.84rem;
+    font-weight:700;
+}
+
+.feedbackdashboard-filter-scope-count {
+    flex:0 0 auto;
+    padding:.2rem .5rem;
+    border:1px solid ' . $border . ';
+    border-radius:999px;
+    background:#fff;
+    color:' . $dark . ';
+    font-size:.73rem;
+    font-weight:600;
+}
+
 .feedbackdashboard-user-picker {
     position:relative;
 }
@@ -1135,19 +1362,21 @@ $dashboardcss = '
     cursor:pointer;
 }
 
-.feedbackdashboard-user-tag-remove:hover {
+.feedbackdashboard-user-tag-remove:hover,
+.feedbackdashboard-user-tag-remove:focus {
     background:'
         . local_feedbackdashboard_mix_color(
             $primary,
             '#FFFFFF',
             0.78
         ) . ';
+    outline:0;
 }
 
 .feedbackdashboard-user-search-input {
-    flex:1 1 210px;
-    min-width:170px;
-    height:30px;
+    flex:1 1 220px;
+    min-width:180px;
+    height:32px;
     padding:.2rem .25rem;
     border:0 !important;
     outline:0 !important;
@@ -1161,7 +1390,7 @@ $dashboardcss = '
     top:calc(100% + .3rem);
     left:0;
     right:0;
-    max-height:240px;
+    max-height:250px;
     overflow-y:auto;
     padding:.3rem;
     background:#fff;
@@ -1200,6 +1429,7 @@ $dashboardcss = '
     margin-top:.08rem;
     color:#637083;
     font-size:.74rem;
+    font-weight:400;
 }
 
 .feedbackdashboard-user-picker-empty {
@@ -1209,30 +1439,103 @@ $dashboardcss = '
 }
 
 .feedbackdashboard-user-picker-help {
-    font-size:.78rem;
-    color:#637083;
     margin-top:.45rem;
+    color:#637083;
+    font-size:.76rem;
+    line-height:1.4;
 }
-.feedbackdashboard-report {background:' . $light . '; border-top:5px solid ' . $primary . '; padding:1.5rem; border-radius:.35rem;}
-.feedbackdashboard-meta {background:#fff; border:1px solid ' . $border . '; padding:.75rem 1rem; margin-bottom:1rem;}
-.feedbackdashboard-card {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; height:100%; position:relative; overflow:hidden;}
-.feedbackdashboard-card::before {content:""; display:block; height:4px; background:var(--card-accent,' . $primary . ');}
-.feedbackdashboard-card-body {padding:.65rem .75rem .8rem; text-align:center;}
-.feedbackdashboard-card-title {font-weight:600; color:#536271; font-size:.88rem;}
-.feedbackdashboard-card-value {font-size:1.9rem; line-height:1.15; font-weight:700; color:' . $dark . '; margin:.2rem 0;}
-.feedbackdashboard-card-detail {color:#637083; font-size:.78rem;}
-.feedbackdashboard-chartbox {background:#fff; border:1px solid ' . $border . '; border-radius:.25rem; padding:1rem; height:100%;}
-.feedbackdashboard-filter-tools {background:' . $light . '; border:1px solid ' . $border . '; border-radius:.5rem; padding:1rem; height:100%;}
-.feedbackdashboard-filter-list {background:#fff; border:1px solid ' . $border . '; border-radius:.5rem; padding:1rem; height:100%;}
-.feedbackdashboard-filter-label {font-weight:600; color:' . $dark . '; margin-bottom:.35rem;}
-.feedbackdashboard-filter-help {font-size:.78rem; color:#637083; margin-top:.35rem;}
-.feedbackdashboard-filter-group-status {display:inline-flex; align-items:center; gap:.35rem; padding:.28rem .55rem; border:1px solid ' . $border . '; border-radius:999px; background:' . $light . '; color:' . $dark . '; font-size:.78rem; font-weight:600;}
-.feedbackdashboard-nps-row {display:grid; grid-template-columns:90px 1fr 92px; align-items:center; gap:.65rem; margin:.8rem 0;}
-.feedbackdashboard-nps-label {font-size:.82rem; font-weight:600; color:#536271;}
-.feedbackdashboard-nps-track {height:24px; background:#eef2f6; border-radius:3px; overflow:hidden;}
-.feedbackdashboard-nps-fill {height:100%; min-width:0; border-radius:3px;}
-.feedbackdashboard-nps-value {font-size:.8rem; font-weight:600; color:' . $dark . '; text-align:right;}
-@media (max-width: 767.98px) {.feedbackdashboard-nps-row {grid-template-columns:80px 1fr;}.feedbackdashboard-nps-value {grid-column:2; text-align:left; margin-top:-.4rem;}}
+
+.feedbackdashboard-filter-selection-row {
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:.75rem;
+    margin-top:.6rem;
+}
+
+.feedbackdashboard-filter-selection-live {
+    color:#637083;
+    font-size:.76rem;
+}
+
+.feedbackdashboard-filter-group-status {
+    display:inline-flex;
+    align-items:center;
+    gap:.35rem;
+    padding:.28rem .55rem;
+    border:1px solid ' . $border . ';
+    border-radius:999px;
+    background:' . $light . ';
+    color:' . $dark . ';
+    font-size:.78rem;
+    font-weight:600;
+}
+
+.feedbackdashboard-filter-empty {
+    padding:1rem;
+    border:1px dashed ' . $border . ';
+    border-radius:.45rem;
+    background:#fff;
+    color:#637083;
+    font-size:.82rem;
+}
+
+/* Dashboard charts. */
+.feedbackdashboard-nps-row {
+    display:grid;
+    grid-template-columns:90px 1fr 92px;
+    align-items:center;
+    gap:.65rem;
+    margin:.8rem 0;
+}
+
+.feedbackdashboard-nps-label {
+    font-size:.82rem;
+    font-weight:600;
+    color:#536271;
+}
+
+.feedbackdashboard-nps-track {
+    height:24px;
+    background:#eef2f6;
+    border-radius:3px;
+    overflow:hidden;
+}
+
+.feedbackdashboard-nps-fill {
+    height:100%;
+    min-width:0;
+    border-radius:3px;
+}
+
+.feedbackdashboard-nps-value {
+    font-size:.8rem;
+    font-weight:600;
+    color:' . $dark . ';
+    text-align:right;
+}
+
+@media (max-width: 767.98px) {
+    .feedbackdashboard-nps-row {
+        grid-template-columns:80px 1fr;
+    }
+
+    .feedbackdashboard-nps-value {
+        grid-column:2;
+        text-align:left;
+        margin-top:-.4rem;
+    }
+
+    .feedbackdashboard-filter-scope,
+    .feedbackdashboard-filter-selection-row {
+        align-items:flex-start;
+        flex-direction:column;
+    }
+
+    .feedbackdashboard-filter-scope-count {
+        align-self:flex-start;
+    }
+}
 ';
 
 echo html_writer::tag('style', $dashboardcss);
@@ -1269,14 +1572,19 @@ echo html_writer::end_div();
 
 /* Participant and group filter. */
 if (!$isanonymous) {
-    echo html_writer::start_div('card mb-4');
+    echo html_writer::start_div('card mb-4 feedbackdashboard-filter-card');
     echo html_writer::start_div('card-body');
 
-    echo $OUTPUT->heading('Filtrar participantes', 3, 'h5 card-title');
+    echo $OUTPUT->heading(
+        'Filtrar participantes',
+        3,
+        'h5 card-title mb-1'
+    );
 
     echo html_writer::tag(
         'p',
-        'Filtre por grupo ou selecione alunos específicos. Os indicadores, gráficos, tabela e PDF serão recalculados com o mesmo filtro.',
+        'Escolha o grupo e, se necessário, selecione alunos específicos. '
+            . 'Os indicadores, gráficos, tabela e PDF serão recalculados com o mesmo filtro.',
         ['class' => 'text-muted mb-3']
     );
 
@@ -1297,23 +1605,47 @@ if (!$isanonymous) {
 
     /*
      * -------------------------------------------------------------
-     * Left side: group and name filters.
+     * Step 1: group scope.
      * -------------------------------------------------------------
      */
     echo html_writer::start_div('col-12 col-lg-4');
-    echo html_writer::start_div('feedbackdashboard-filter-tools');
-
-    echo html_writer::tag(
-        'div',
-        'Filtros',
-        ['class' => 'fw-bold mb-3']
+    echo html_writer::start_div(
+        'feedbackdashboard-filter-section feedbackdashboard-filter-section-soft'
     );
 
-    // Group dropdown.
-    echo html_writer::tag('label', 'Filtrar por grupo', [
-        'for' => 'feedbackdashboard-group-filter',
-        'class' => 'form-label feedbackdashboard-filter-label',
-    ]);
+    echo html_writer::start_div('feedbackdashboard-filter-section-heading');
+
+    echo html_writer::span(
+        '1',
+        'feedbackdashboard-filter-step',
+        ['aria-hidden' => 'true']
+    );
+
+    echo html_writer::start_div();
+
+    echo html_writer::tag(
+        'h4',
+        'Escolha o grupo',
+        ['class' => 'feedbackdashboard-filter-section-title']
+    );
+
+    echo html_writer::tag(
+        'p',
+        'Defina primeiro de qual grupo virão os participantes.',
+        ['class' => 'feedbackdashboard-filter-section-subtitle']
+    );
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+
+    echo html_writer::tag(
+        'label',
+        'Grupo',
+        [
+            'for' => 'feedbackdashboard-group-filter',
+            'class' => 'form-label feedbackdashboard-filter-label',
+        ]
+    );
 
     $groupoptions = [
         0 => 'Todos os grupos',
@@ -1330,6 +1662,7 @@ if (!$isanonymous) {
     $groupselectattributes = [
         'id' => 'feedbackdashboard-group-filter',
         'class' => 'form-select',
+        'aria-describedby' => 'feedbackdashboard-group-help',
     ];
 
     if (empty($availablegroups)) {
@@ -1345,287 +1678,364 @@ if (!$isanonymous) {
     );
 
     if (empty($availablegroups)) {
-        echo html_writer::tag(
-            'div',
-            'Nenhum grupo está disponível para esta atividade.',
-            ['class' => 'feedbackdashboard-filter-help mb-3']
-        );
+        $grouphelp =
+            'Nenhum grupo está disponível para esta atividade.';
     } else {
-        echo html_writer::tag(
-            'div',
-            'Selecione um grupo para exibir somente os participantes desse grupo.',
-            ['class' => 'feedbackdashboard-filter-help mb-3']
-        );
+        $grouphelp =
+            'Ao trocar o grupo, a lista de alunos é atualizada automaticamente. '
+            . 'Se nenhum aluno específico for escolhido, o grupo inteiro será considerado.';
     }
-
-    // Student search.
-    echo html_writer::tag('label', 'Pesquisar aluno', [
-        'for' => 'feedbackdashboard-student-search',
-        'class' => 'form-label feedbackdashboard-filter-label mt-2',
-    ]);
-
-    echo html_writer::empty_tag('input', [
-        'type' => 'search',
-        'id' => 'feedbackdashboard-student-search',
-        'class' => 'form-control',
-        'placeholder' => 'Digite o nome do aluno...',
-    ]);
 
     echo html_writer::tag(
         'div',
-        'A busca por nome refina apenas a lista de participantes exibida ao lado.',
-        ['class' => 'feedbackdashboard-filter-help']
-    );
-
-    echo html_writer::end_div();
-    echo html_writer::end_div();
-
-echo html_writer::start_div('col-12 col-lg-8');
-
-echo html_writer::tag(
-    'label',
-    'Selecionar alunos',
-    [
-        'for' => 'feedbackdashboard-student-search',
-        'class' => 'form-label feedbackdashboard-filter-label',
-    ]
-);
-
-if (empty($responders)) {
-    $emptymessage = $selectedgroupid > 0
-        ? 'Nenhum participante deste grupo respondeu esta pesquisa.'
-        : 'Ainda não há alunos identificados que responderam esta pesquisa.';
-
-    echo html_writer::start_div(
-        'feedbackdashboard-filter-list'
-    );
-
-    echo html_writer::div(
-        s($emptymessage),
-        'text-muted py-3'
-    );
-
-    echo html_writer::end_div();
-} else {
-
-    echo html_writer::start_div(
-        'feedbackdashboard-user-picker',
+        $grouphelp,
         [
-            'id' => 'feedbackdashboard-user-picker',
-        ]
-    );
-
-    echo html_writer::start_div(
-        'feedbackdashboard-user-picker-box'
-    );
-
-    /*
-     * Tags já selecionadas.
-     */
-    echo html_writer::start_div(
-        'feedbackdashboard-selected-users',
-        [
-            'id' => 'feedbackdashboard-selected-users',
-        ]
-    );
-
-    foreach ($selecteduserids as $selecteduserid) {
-
-        if (!isset($responders[$selecteduserid])) {
-            continue;
-        }
-
-        $selectedresponder =
-            $responders[$selecteduserid];
-
-        $selectedname =
-            fullname($selectedresponder);
-
-        echo html_writer::start_tag(
-            'span',
-            [
-                'class' =>
-                    'feedbackdashboard-user-tag',
-
-                'data-user-id' =>
-                    $selecteduserid,
-            ]
-        );
-
-        echo html_writer::span(
-            s($selectedname),
-            'feedbackdashboard-user-tag-label'
-        );
-
-        echo html_writer::tag(
-            'button',
-            '×',
-            [
-                'type' => 'button',
-
-                'class' =>
-                    'feedbackdashboard-user-tag-remove',
-
-                'data-user-id' =>
-                    $selecteduserid,
-
-                'title' =>
-                    'Remover aluno',
-
-                'aria-label' =>
-                    'Remover ' . $selectedname,
-            ]
-        );
-
-        echo html_writer::end_tag('span');
-    }
-
-    echo html_writer::end_div();
-
-    /*
-     * Caixa onde o nome é digitado.
-     */
-    echo html_writer::empty_tag(
-        'input',
-        [
-            'type' => 'search',
-
-            'id' =>
-                'feedbackdashboard-student-search',
-
-            'class' =>
-                'feedbackdashboard-user-search-input',
-
-            'placeholder' =>
-                empty($selecteduserids)
-                    ? 'Digite o nome do aluno...'
-                    : 'Adicionar outro aluno...',
-
-            'aria-autocomplete' => 'list',
-
-            'aria-controls' =>
-                'feedbackdashboard-user-suggestions',
-        ]
-    );
-
-    echo html_writer::end_div();
-
-    /*
-     * Mantém users[] para o backend atual.
-     */
-    echo html_writer::start_div(
-        '',
-        [
-            'id' =>
-                'feedbackdashboard-selected-user-inputs',
-        ]
-    );
-
-    foreach ($selecteduserids as $selecteduserid) {
-
-        echo html_writer::empty_tag(
-            'input',
-            [
-                'type' => 'hidden',
-                'name' => 'users[]',
-                'value' => $selecteduserid,
-
-                'data-user-id' =>
-                    $selecteduserid,
-            ]
-        );
-    }
-
-    echo html_writer::end_div();
-
-    /*
-     * Dropbox/autocomplete.
-     */
-    echo html_writer::start_div(
-        'feedbackdashboard-user-suggestions',
-        [
-            'id' =>
-                'feedbackdashboard-user-suggestions',
-
-            'role' => 'listbox',
-            'hidden' => 'hidden',
-        ]
-    );
-
-    foreach ($responders as $responder) {
-
-        $responderid =
-            (int) $responder->id;
-
-        $respondername =
-            fullname($responder);
-
-        $suggestioncontent =
-            html_writer::span(
-                s($respondername),
-                'feedbackdashboard-user-suggestion-name'
-            );
-
-        if (!empty($responder->email)) {
-
-            $suggestioncontent .=
-                html_writer::span(
-                    s($responder->email),
-                    'feedbackdashboard-user-suggestion-email'
-                );
-        }
-
-        echo html_writer::tag(
-            'button',
-            $suggestioncontent,
-            [
-                'type' => 'button',
-
-                'class' =>
-                    'feedbackdashboard-user-suggestion',
-
-                'data-user-id' =>
-                    $responderid,
-
-                'data-user-name' =>
-                    $respondername,
-
-                'role' => 'option',
-            ]
-        );
-    }
-
-    echo html_writer::div(
-        'Nenhum aluno encontrado.',
-        'feedbackdashboard-user-picker-empty',
-        [
-            'id' =>
-                'feedbackdashboard-no-user-suggestion',
-
-            'hidden' => 'hidden',
+            'id' => 'feedbackdashboard-group-help',
+            'class' => 'feedbackdashboard-filter-help',
         ]
     );
 
     echo html_writer::end_div();
     echo html_writer::end_div();
-
-    echo html_writer::tag(
-        'div',
-        empty($selecteduserids)
-            ? 'Nenhum aluno específico selecionado: o Dashboard considera todos os respondentes do grupo atual.'
-            : 'Continue digitando para adicionar outros alunos. Clique no × de uma tag para remover.',
-        [
-            'class' =>
-                'feedbackdashboard-user-picker-help',
-        ]
-    );
-}
-
-echo html_writer::end_div();
 
     /*
      * -------------------------------------------------------------
-     * Filter actions and current state.
+     * Step 2: participant selection.
+     * -------------------------------------------------------------
+     */
+    echo html_writer::start_div('col-12 col-lg-8');
+    echo html_writer::start_div('feedbackdashboard-filter-section');
+
+    echo html_writer::start_div('feedbackdashboard-filter-section-heading');
+
+    echo html_writer::span(
+        '2',
+        'feedbackdashboard-filter-step',
+        ['aria-hidden' => 'true']
+    );
+
+    echo html_writer::start_div();
+
+    echo html_writer::tag(
+        'h4',
+        'Escolha os participantes',
+        ['class' => 'feedbackdashboard-filter-section-title']
+    );
+
+    echo html_writer::tag(
+        'p',
+        'Use todos os respondentes do grupo ou selecione somente os alunos que deseja analisar.',
+        ['class' => 'feedbackdashboard-filter-section-subtitle']
+    );
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+
+    /*
+     * Current scope summary.
+     */
+    if (
+        $selectedgroupid > 0
+        && isset($availablegroups[$selectedgroupid])
+    ) {
+        $currentscopename = format_string(
+            $availablegroups[$selectedgroupid]->name,
+            true,
+            ['context' => $context]
+        );
+    } else {
+        $currentscopename = 'Todos os grupos';
+    }
+
+    if (!empty($selecteduserids)) {
+        $currentscopevalue =
+            count($selecteduserids) === 1
+                ? '1 aluno específico'
+                : count($selecteduserids) . ' alunos específicos';
+    } else if ($selectedgroupid > 0) {
+        $currentscopevalue = 'Grupo inteiro';
+    } else {
+        $currentscopevalue = 'Todos os respondentes';
+    }
+
+    echo html_writer::start_div('feedbackdashboard-filter-scope');
+
+    echo html_writer::start_div();
+
+    echo html_writer::span(
+        'Escopo atual',
+        'feedbackdashboard-filter-scope-label'
+    );
+
+    echo html_writer::div(
+        s($currentscopename . ' · ' . $currentscopevalue),
+        'feedbackdashboard-filter-scope-value'
+    );
+
+    echo html_writer::end_div();
+
+    echo html_writer::span(
+        count($responders) . ' respondente(s) disponível(is)',
+        'feedbackdashboard-filter-scope-count'
+    );
+
+    echo html_writer::end_div();
+
+    if (empty($responders)) {
+        $emptymessage = $selectedgroupid > 0
+            ? 'Nenhum participante deste grupo respondeu esta pesquisa.'
+            : 'Ainda não há alunos identificados que responderam esta pesquisa.';
+
+        echo html_writer::div(
+            s($emptymessage),
+            'feedbackdashboard-filter-empty'
+        );
+    } else {
+        echo html_writer::tag(
+            'label',
+            'Selecionar alunos específicos',
+            [
+                'for' => 'feedbackdashboard-student-search',
+                'class' => 'form-label feedbackdashboard-filter-label',
+            ]
+        );
+
+        echo html_writer::start_div(
+            'feedbackdashboard-user-picker',
+            [
+                'id' => 'feedbackdashboard-user-picker',
+            ]
+        );
+
+        echo html_writer::start_div(
+            'feedbackdashboard-user-picker-box'
+        );
+
+        /*
+         * Selected users are rendered as tags.
+         */
+        echo html_writer::start_div(
+            'feedbackdashboard-selected-users',
+            [
+                'id' => 'feedbackdashboard-selected-users',
+            ]
+        );
+
+        foreach ($selecteduserids as $selecteduserid) {
+            if (!isset($responders[$selecteduserid])) {
+                continue;
+            }
+
+            $selectedresponder =
+                $responders[$selecteduserid];
+
+            $selectedname =
+                fullname($selectedresponder);
+
+            echo html_writer::start_tag(
+                'span',
+                [
+                    'class' => 'feedbackdashboard-user-tag',
+                    'data-user-id' => $selecteduserid,
+                ]
+            );
+
+            echo html_writer::span(
+                s($selectedname),
+                'feedbackdashboard-user-tag-label'
+            );
+
+            echo html_writer::tag(
+                'button',
+                '×',
+                [
+                    'type' => 'button',
+                    'class' => 'feedbackdashboard-user-tag-remove',
+                    'data-user-id' => $selecteduserid,
+                    'title' => 'Remover aluno',
+                    'aria-label' => 'Remover ' . $selectedname,
+                ]
+            );
+
+            echo html_writer::end_tag('span');
+        }
+
+        echo html_writer::end_div();
+
+        /*
+         * This is the only student search field.
+         */
+        echo html_writer::empty_tag(
+            'input',
+            [
+                'type' => 'search',
+                'id' => 'feedbackdashboard-student-search',
+                'class' => 'feedbackdashboard-user-search-input',
+                'placeholder' => empty($selecteduserids)
+                    ? 'Digite ou escolha um aluno...'
+                    : 'Adicionar outro aluno...',
+                'aria-autocomplete' => 'list',
+                'aria-expanded' => 'false',
+                'aria-controls' => 'feedbackdashboard-user-suggestions',
+                'aria-describedby' => 'feedbackdashboard-student-help',
+            ]
+        );
+
+        echo html_writer::end_div();
+
+        /*
+         * Preserve the existing users[] backend contract.
+         */
+        echo html_writer::start_div(
+            '',
+            [
+                'id' => 'feedbackdashboard-selected-user-inputs',
+            ]
+        );
+
+        foreach ($selecteduserids as $selecteduserid) {
+            echo html_writer::empty_tag(
+                'input',
+                [
+                    'type' => 'hidden',
+                    'name' => 'users[]',
+                    'value' => $selecteduserid,
+                    'data-user-id' => $selecteduserid,
+                ]
+            );
+        }
+
+        echo html_writer::end_div();
+
+        /*
+         * Autocomplete options.
+         */
+        echo html_writer::start_div(
+            'feedbackdashboard-user-suggestions',
+            [
+                'id' => 'feedbackdashboard-user-suggestions',
+                'role' => 'listbox',
+                'hidden' => 'hidden',
+            ]
+        );
+
+        foreach ($responders as $responder) {
+            $responderid =
+                (int) $responder->id;
+
+            $respondername =
+                fullname($responder);
+
+            $responderemail =
+                (string) ($responder->email ?? '');
+
+            $suggestioncontent =
+                html_writer::span(
+                    s($respondername),
+                    'feedbackdashboard-user-suggestion-name'
+                );
+
+            if ($responderemail !== '') {
+                $suggestioncontent .=
+                    html_writer::span(
+                        s($responderemail),
+                        'feedbackdashboard-user-suggestion-email'
+                    );
+            }
+
+            echo html_writer::tag(
+                'button',
+                $suggestioncontent,
+                [
+                    'type' => 'button',
+                    'class' => 'feedbackdashboard-user-suggestion',
+                    'data-user-id' => $responderid,
+                    'data-user-name' => $respondername,
+                    'data-user-email' => $responderemail,
+                    'role' => 'option',
+                ]
+            );
+        }
+
+        echo html_writer::div(
+            'Nenhum aluno encontrado.',
+            'feedbackdashboard-user-picker-empty',
+            [
+                'id' => 'feedbackdashboard-no-user-suggestion',
+                'hidden' => 'hidden',
+            ]
+        );
+
+        echo html_writer::end_div();
+        echo html_writer::end_div();
+
+        $emptyselectiontext = $selectedgroupid > 0
+            ? 'Nenhum aluno específico selecionado. O grupo inteiro será considerado.'
+            : 'Nenhum aluno específico selecionado. Todos os respondentes serão considerados.';
+
+        echo html_writer::start_div(
+            'feedbackdashboard-filter-selection-row'
+        );
+
+        echo html_writer::tag(
+            'div',
+            empty($selecteduserids)
+                ? $emptyselectiontext
+                : (
+                    count($selecteduserids) === 1
+                        ? '1 aluno específico selecionado.'
+                        : count($selecteduserids) . ' alunos específicos selecionados.'
+                ),
+            [
+                'id' => 'feedbackdashboard-selection-live',
+                'class' => 'feedbackdashboard-filter-selection-live',
+                'role' => 'status',
+                'aria-live' => 'polite',
+                'data-empty-text' => $emptyselectiontext,
+            ]
+        );
+
+        $clearstudentstext = $selectedgroupid > 0
+            ? 'Usar grupo inteiro'
+            : 'Usar todos os respondentes';
+
+        $clearstudentsattributes = [
+            'type' => 'button',
+            'id' => 'feedbackdashboard-clear-selected-users',
+            'class' => 'btn btn-sm btn-outline-secondary',
+        ];
+
+        if (empty($selecteduserids)) {
+            $clearstudentsattributes['hidden'] = 'hidden';
+        }
+
+        echo html_writer::tag(
+            'button',
+            $clearstudentstext,
+            $clearstudentsattributes
+        );
+
+        echo html_writer::end_div();
+
+        echo html_writer::tag(
+            'div',
+            'Clique na caixa para ver os respondentes disponíveis ou digite parte do nome/e-mail. '
+                . 'Você pode adicionar um ou vários alunos.',
+            [
+                'id' => 'feedbackdashboard-student-help',
+                'class' => 'feedbackdashboard-user-picker-help',
+            ]
+        );
+    }
+
+    echo html_writer::end_div();
+    echo html_writer::end_div();
+
+    echo html_writer::end_div();
+
+    /*
+     * -------------------------------------------------------------
+     * Actions and applied-filter summary.
      * -------------------------------------------------------------
      */
     echo html_writer::start_div(
@@ -1649,30 +2059,44 @@ echo html_writer::end_div();
 
     $statusparts = [];
 
-    if ($selectedgroupid > 0 && isset($availablegroups[$selectedgroupid])) {
-        $groupname = format_string(
+    if (
+        $selectedgroupid > 0
+        && isset($availablegroups[$selectedgroupid])
+    ) {
+        $statusgroupname = format_string(
             $availablegroups[$selectedgroupid]->name,
             true,
             ['context' => $context]
         );
 
-        $statusparts[] = 'Grupo: ' . $groupname;
+        $statusparts[] = 'Grupo: ' . $statusgroupname;
     } else {
         $statusparts[] = 'Todos os grupos';
     }
 
     if (empty($selecteduserids)) {
-        $statusparts[] = count($responders) . ' participante(s)';
+        if ($selectedgroupid > 0) {
+            $statusparts[] =
+                'grupo inteiro (' . count($responders) . ' respondente(s))';
+        } else {
+            $statusparts[] =
+                count($responders) . ' respondente(s)';
+        }
     } else if (count($selecteduserids) === 1) {
         $statusparts[] = '1 aluno selecionado';
     } else {
-        $statusparts[] = count($selecteduserids) . ' alunos selecionados';
+        $statusparts[] =
+            count($selecteduserids)
+            . ' alunos selecionados';
     }
 
     echo html_writer::tag(
         'span',
         s(implode(' · ', $statusparts)),
-        ['class' => 'feedbackdashboard-filter-group-status ms-1']
+        [
+            'class' =>
+                'feedbackdashboard-filter-group-status ms-1',
+        ]
     );
 
     echo html_writer::end_div();
@@ -1682,7 +2106,8 @@ echo html_writer::end_div();
     echo html_writer::end_div();
 } else {
     echo $OUTPUT->notification(
-        'Esta pesquisa é anônima. O NPS é calculado normalmente, porém os filtros por aluno e grupo permanecem indisponíveis.',
+        'Esta pesquisa é anônima. O NPS é calculado normalmente, '
+            . 'porém os filtros por aluno e grupo permanecem indisponíveis.',
         'warning'
     );
 }
