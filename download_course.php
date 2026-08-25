@@ -295,23 +295,23 @@ function local_feedbackdashboard_coursepdf_draw_logo(
     $y = 12.0;
 
     $pdf->Image(
-        $logopath,
-        $x,
-        $y,
-        $width,
-        $height,
-        '',
-        '',
-        '',
-        true,
-        300,
-        '',
-        false,
-        false,
-        0,
-        true,
-        false,
-        false
+    $logopath,
+    $x,
+    $y,
+    $width,
+    $height,
+    '',
+    '',
+    '',
+    true,
+    300,
+    '',
+    false,
+    false,
+    0,
+    true,
+    false,
+    false
     );
 }
 
