@@ -1583,6 +1583,28 @@ echo html_writer::link($pdfurl, $pdfbuttoncontent, [
 ]);
 echo html_writer::end_div();
 
+/* Chartbox graphic. */
+echo html_writer::start_div('feedbackdashboard-chartbox feedbackdashboard-chartbox--score');
+echo html_writer::tag('h3', 'Gráfico de Avaliações por Nota', ['class' => 'h5 mb-2']);
+
+$chart = new \core\chart_bar();
+$chart->set_horizontal(false);
+$chart->set_labels(array_map('strval', range(0, 10)));
+$chart->set_legend_options(['display' => false]);
+
+$serieslabels = [];
+foreach ($metrics['scorecounts'] as $count) {
+    $serieslabels[] = (string) $count;
+}
+
+$series = new \core\chart_series('Respostas', array_values($metrics['scorecounts']));
+$series->set_labels($serieslabels);
+$series->set_color($primary);
+$chart->add_series($series);
+
+echo $OUTPUT->render($chart);
+echo html_writer::end_div();
+
 /* Participant and group filter. */
 if (!$isanonymous) {
     echo html_writer::start_div('card mb-4 feedbackdashboard-filter-card');
