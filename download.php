@@ -1040,6 +1040,15 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     ?string $logopath,
     bool $continued = false
 ): array {
+
+    $feedbackfullname = format_string($feedback->name);
+
+    $nameparts = explode(' - ', $feedbackfullname, 2);
+
+    $displayname = isset($nameparts[1]) && trim($nameparts[1]) !== ''
+        ? trim($nameparts[1])
+        : $feedbackfullname;
+
     $pdf->AddPage();
 
     local_feedbackdashboard_pdf_draw_page_base(
