@@ -1410,7 +1410,7 @@ $pdf->SetMargins(0, 0, 0);
 
 $pdf->SetCreator('Moodle - Feedback Dashboard');
 $pdf->SetAuthor(fullname($USER));
-$pdf->SetTitle(format_string($feedback->name));
+$pdf->SetTitle($displayname);
 $pdf->SetSubject('Relatório NPS de Feedback');
 
 /*
