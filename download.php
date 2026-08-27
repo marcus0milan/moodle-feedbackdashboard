@@ -1097,7 +1097,7 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     $pdf->Cell(
         210,
         4.7,
-        'Pesquisa: ' . format_string($feedback->name),
+        'Pesquisa: ' . $displayname,
         0,
         1,
         'L'
