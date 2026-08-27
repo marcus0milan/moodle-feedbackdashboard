@@ -1088,7 +1088,7 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     $pdf->Cell(
         210,
         4.7,
-        'Pesquisa: ' . format_string($displayname),
+        'Pesquisa: ' . format_string($feedback->name),
         0,
         1,
         'L'
@@ -1253,14 +1253,6 @@ $feedback = $DB->get_record(
     MUST_EXIST
 );
 
-$feedbackfullname = format_string($displayname);
-
-$nameparts = explode(' - ', $feedbackfullname, 2);
-
-$displayname = isset($nameparts[1]) && trim($nameparts[1]) !== ''
-    ? trim($nameparts[1])
-    : $feedbackfullname;
-
 $isanonymous = ((int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES);
 
 if ($isanonymous) {
@@ -1410,7 +1402,7 @@ $pdf->SetMargins(0, 0, 0);
 
 $pdf->SetCreator('Moodle - Feedback Dashboard');
 $pdf->SetAuthor(fullname($USER));
-$pdf->SetTitle($displayname);
+$pdf->SetTitle(format_string($feedback->name));
 $pdf->SetSubject('Relatório NPS de Feedback');
 
 /*
@@ -1438,7 +1430,7 @@ $pdf->Cell(205, 8, 'Feedback de Pesquisa de Satisfação do aluno', 0, 1, 'L');
 $pdf->SetFont('helvetica', 'I', 8);
 local_feedbackdashboard_pdf_set_text($pdf, '#637083');
 $pdf->SetX(12);
-$pdf->Cell(205, 4.5, 'Aula: ' . format_string($displayname), 0, 1, 'L');
+$pdf->Cell(205, 4.5, 'Aula: ' . format_string($feedback->name), 0, 1, 'L');
 
 // Metadata box, matching the web dashboard.
 $metax = 12.0;
@@ -1759,7 +1751,7 @@ if (empty($responserows)) {
 
 \core\session\manager::write_close();
 
-$filename = clean_filename('dashboard_nps_' . $displayname . '.pdf');
+$filename = clean_filename('dashboard_nps_' . $feedback->name . '.pdf');
 
 $pdf->Output($filename, 'D');
 exit;
