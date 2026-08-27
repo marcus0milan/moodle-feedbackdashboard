@@ -1253,6 +1253,14 @@ $feedback = $DB->get_record(
     MUST_EXIST
 );
 
+$feedbackfullname = format_string($feedback->name);
+
+$nameparts = explode(' - ', $feedbackfullname, 2);
+
+$displayname = isset($nameparts[1]) && trim($nameparts[1]) !== ''
+    ? trim($nameparts[1])
+    : $feedbackfullname;
+
 $isanonymous = ((int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES);
 
 if ($isanonymous) {
@@ -1430,7 +1438,7 @@ $pdf->Cell(205, 8, 'Feedback de Pesquisa de Satisfação do aluno', 0, 1, 'L');
 $pdf->SetFont('helvetica', 'I', 8);
 local_feedbackdashboard_pdf_set_text($pdf, '#637083');
 $pdf->SetX(12);
-$pdf->Cell(205, 4.5, 'Aula: ' . format_string($feedback->name), 0, 1, 'L');
+$pdf->Cell(205, 4.5, 'Aula: ' . $displayname, 0, 1, 'L');
 
 // Metadata box, matching the web dashboard.
 $metax = 12.0;
