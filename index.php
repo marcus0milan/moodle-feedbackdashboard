@@ -2154,7 +2154,7 @@ echo html_writer::tag('h2', 'Feedback de Pesquisa de Satisfação do aluno', [
     'class' => 'mb-1',
     'style' => 'color:' . $dark . ';',
 ]);
-echo html_writer::tag('div', 'Aula: ' . s(format_string($feedback->name)), [
+echo html_writer::tag('div', 'Aula: ' . s($displayname), [
     'class' => 'text-muted fst-italic mb-3',
 ]);
 
