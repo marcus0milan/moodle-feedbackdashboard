@@ -121,6 +121,21 @@ if (!$summary['hasnps']) {
 }
 
 /*
+ * Nome exibido no course.php.
+ * Exemplo:
+ * "Pesquisa de Satisfação de Aula - Aula 05 - Neurologia"
+ * vira:
+ * "Aula 05 - Neurologia"
+ */
+$feedbackfullname = format_string($record->feedbackname);
+
+$nameparts = explode(' - ', $feedbackfullname, 2);
+
+$displayname = isset($nameparts[1]) && trim($nameparts[1]) !== ''
+    ? trim($nameparts[1])
+    : $feedbackfullname;
+
+/*
  * Activity available in the course filter.
  */
 $activityid = (int) $record->cmid;
