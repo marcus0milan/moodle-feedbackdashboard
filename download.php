@@ -1040,6 +1040,8 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     ?string $logopath,
     bool $continued = false
 ): array {
+    $displayname = local_feedbackdashboard_pdf_get_display_name($feedback->name);
+
     $pdf->AddPage();
 
     local_feedbackdashboard_pdf_draw_page_base(
@@ -1088,7 +1090,7 @@ function local_feedbackdashboard_pdf_draw_response_page_header(
     $pdf->Cell(
         210,
         4.7,
-        'Pesquisa: ' . format_string($feedback->name),
+        'Aula: ' . $displayname,
         0,
         1,
         'L'
@@ -1253,6 +1255,11 @@ $feedback = $DB->get_record(
     MUST_EXIST
 );
 
+$feedbackfullname = format_string($feedback->name);
+
+$nameparts = explode(' - ', $feedbackfullname, 2);
+
+
 $isanonymous = ((int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES);
 
 if ($isanonymous) {
@@ -1386,6 +1393,7 @@ $neutralcolor = '#E9C46A';
 $badcolor = '#E76F51';
 
 $logopath = local_feedbackdashboard_pdf_find_logo();
+$displayname = local_feedbackdashboard_pdf_get_display_name($feedback->name);
 
 /*
  * -------------------------------------------------------------------------
@@ -1402,7 +1410,7 @@ $pdf->SetMargins(0, 0, 0);
 
 $pdf->SetCreator('Moodle - Feedback Dashboard');
 $pdf->SetAuthor(fullname($USER));
-$pdf->SetTitle(format_string($feedback->name));
+$pdf->SetTitle($displayname);
 $pdf->SetSubject('Relatório NPS de Feedback');
 
 /*
@@ -1751,7 +1759,7 @@ if (empty($responserows)) {
 
 \core\session\manager::write_close();
 
-$filename = clean_filename('dashboard_nps_' . $feedback->name . '.pdf');
+$filename = clean_filename('dashboard_nps_' . $displayname . '.pdf');
 
 $pdf->Output($filename, 'D');
 exit;
