@@ -142,7 +142,7 @@ $activityid = (int) $record->cmid;
 
 $availableactivities[$activityid] = [
     'id' => $activityid,
-    'name' => format_string($record->feedbackname),
+    'name' => $displayname,
 ];
 
 /*
