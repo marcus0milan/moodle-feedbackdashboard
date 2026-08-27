@@ -176,7 +176,7 @@ if (
 
     $feedbacklink = html_writer::link(
         $dashboardurl,
-        format_string($record->feedbackname),
+        format_string($displayname),
         ['class' => 'fw-semibold']
     );
 
