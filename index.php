@@ -426,6 +426,15 @@ require_capability('local/feedbackdashboard:view', $context);
 require_capability('mod/feedback:viewreports', $context);
 
 $feedback = $DB->get_record('feedback', ['id' => $cm->instance], '*', MUST_EXIST);
+
+$feedbackfullname = format_string($feedback->name);
+
+$nameparts = explode(' - ', $feedbackfullname, 2);
+
+$displayname = isset($nameparts[1]) && trim($nameparts[1]) !== ''
+    ? trim($nameparts[1])
+    : $feedbackfullname;
+
 $isanonymous = ((int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES);
 
 /*
