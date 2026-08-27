@@ -492,7 +492,7 @@ $PAGE->set_course($course);
 $PAGE->set_cm($cm, $course);
 $PAGE->set_context($context);
 $PAGE->set_pagelayout('incourse');
-$PAGE->set_title('Dashboard de NPS: ' . format_string($feedback->name));
+$PAGE->set_title('Dashboard de NPS: ' . $displayname);
 $PAGE->set_heading(format_string($course->fullname));
 
 $primary = local_feedbackdashboard_get_theme_primary_color();
