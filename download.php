@@ -1253,6 +1253,14 @@ $feedback = $DB->get_record(
     MUST_EXIST
 );
 
+$feedbackfullname = format_string($feedback->name);
+
+$nameparts = explode(' - ', $feedbackfullname, 2);
+
+$displayname = isset($nameparts[1]) && trim($nameparts[1]) !== ''
+    ? trim($nameparts[1])
+    : $feedbackfullname;
+
 $isanonymous = ((int) $feedback->anonymous === FEEDBACK_ANONYMOUS_YES);
 
 if ($isanonymous) {
