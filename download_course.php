@@ -254,23 +254,103 @@ function local_feedbackdashboard_coursepdf_find_logo(): ?string {
 }
 
 /**
- * Draws the company logo in the upper-right corner.
- *
- * Uses the same dimensions as the existing Feedback PDF.
+ * Draws the report logo and the Moodle institutional logo.
  *
  * @param pdf $pdf PDF object.
- * @param string|null $logopath Logo path.
+ * @param string|null $logopath Report/plugin logo path.
  * @return void
  */
 function local_feedbackdashboard_coursepdf_draw_logo(
     pdf $pdf,
     ?string $logopath
 ): void {
-    if ($logopath === null || !is_readable($logopath)) {
+
+    /*
+     * Right edge used by the logos.
+     */
+    $rightedge = $pdf->getPageWidth() - 12.0;
+
+    $y = 12.0;
+
+    /*
+     * Distance between the two logos.
+     */
+    $gap = 10.0;
+
+    /*
+     * -------------------------------------------------------------
+     * Existing LOGO / report logo.
+     * -------------------------------------------------------------
+     */
+
+    if (
+        $logopath !== null
+        && is_readable($logopath)
+    ) {
+        $imagesize = @getimagesize($logopath);
+
+        if (
+            is_array($imagesize)
+            && !empty($imagesize[0])
+            && !empty($imagesize[1])
+        ) {
+            $maxwidth = 56.0;
+            $maxheight = 12.5;
+
+            $scale = min(
+                $maxwidth / $imagesize[0],
+                $maxheight / $imagesize[1]
+            );
+
+            $width = max(
+                1.0,
+                $imagesize[0] * $scale
+            );
+
+            $height = max(
+                1.0,
+                $imagesize[1] * $scale
+            );
+
+            $x = $rightedge - $width;
+
+            $pdf->Image(
+                $logopath,
+                $x,
+                $y,
+                $width,
+                $height,
+                '',
+                '',
+                '',
+                false,
+                300
+            );
+
+            /*
+             * Institutional logo goes to the left.
+             */
+            $rightedge = $x - $gap;
+        }
+    }
+
+    /*
+     * -------------------------------------------------------------
+     * Moodle institutional logo.
+     * -------------------------------------------------------------
+     */
+
+    $moodlelogopath =
+        local_feedbackdashboard_coursepdf_find_moodle_logo();
+
+    if (
+        $moodlelogopath === null
+        || !is_readable($moodlelogopath)
+    ) {
         return;
     }
 
-    $imagesize = @getimagesize($logopath);
+    $imagesize = @getimagesize($moodlelogopath);
 
     if (
         !is_array($imagesize)
@@ -280,7 +360,7 @@ function local_feedbackdashboard_coursepdf_draw_logo(
         return;
     }
 
-    $maxwidth = 56.0;
+    $maxwidth = 46.0;
     $maxheight = 12.5;
 
     $scale = min(
@@ -288,24 +368,137 @@ function local_feedbackdashboard_coursepdf_draw_logo(
         $maxheight / $imagesize[1]
     );
 
-    $width = max(1.0, $imagesize[0] * $scale);
-    $height = max(1.0, $imagesize[1] * $scale);
+    $width = max(
+        1.0,
+        $imagesize[0] * $scale
+    );
 
-    $x = $pdf->getPageWidth() - 12 - $width;
-    $y = 12.0;
+    $height = max(
+        1.0,
+        $imagesize[1] * $scale
+    );
+
+    $x = $rightedge - $width;
 
     $pdf->Image(
-    $logopath,
-    $x,
-    $y,
-    $width,
-    $height,
-    '',
-    '',
-    '',
-    false,
-    300
+        $moodlelogopath,
+        $x,
+        $y,
+        $width,
+        $height,
+        '',
+        '',
+        '',
+        false,
+        300
     );
+}
+
+/**
+ * Finds the institutional logo configured in Moodle.
+ *
+ * @return string|null
+ */
+function local_feedbackdashboard_coursepdf_find_moodle_logo(): ?string {
+    static $resolved = false;
+    static $cachedpath = null;
+
+    if ($resolved) {
+        return $cachedpath;
+    }
+
+    $resolved = true;
+
+    $context = context_system::instance();
+    $fs = get_file_storage();
+
+    foreach (['logo', 'logocompact'] as $filearea) {
+        $configured = trim(
+            (string) get_config(
+                'core_admin',
+                $filearea
+            )
+        );
+
+        if ($configured === '') {
+            continue;
+        }
+
+        $configured = str_replace(
+            '\\',
+            '/',
+            $configured
+        );
+
+        $filename = basename($configured);
+        $directory = dirname($configured);
+
+        if (
+            $directory === '.'
+            || $directory === '/'
+        ) {
+            $filepath = '/';
+        } else {
+            $filepath =
+                '/'
+                . trim($directory, '/')
+                . '/';
+        }
+
+        $storedfile = $fs->get_file(
+            $context->id,
+            'core_admin',
+            $filearea,
+            0,
+            $filepath,
+            $filename
+        );
+
+        if (
+            !$storedfile
+            || $storedfile->is_directory()
+        ) {
+            continue;
+        }
+
+        $tempdir = make_temp_directory(
+            'local_feedbackdashboard'
+        );
+
+        $extension = strtolower(
+            pathinfo(
+                $filename,
+                PATHINFO_EXTENSION
+            )
+        );
+
+        $tempfilename =
+            'moodle_'
+            . $filearea
+            . '_'
+            . $storedfile->get_contenthash();
+
+        if ($extension !== '') {
+            $tempfilename .= '.' . $extension;
+        }
+
+        $temppath =
+            $tempdir
+            . DIRECTORY_SEPARATOR
+            . $tempfilename;
+
+        if (!is_readable($temppath)) {
+            if (!$storedfile->copy_content_to($temppath)) {
+                continue;
+            }
+        }
+
+        $cachedpath = $temppath;
+
+        return $cachedpath;
+    }
+
+    return null;
 }
 
 /**
