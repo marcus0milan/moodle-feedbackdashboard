@@ -332,44 +332,152 @@ function local_feedbackdashboard_pdf_find_moodle_logo(): ?string {
 }
 
 /**
- * Draws the company logo in the upper-right corner while preserving aspect ratio.
+ * Draws the report logo and the Moodle institutional logo.
  *
  * @param pdf $pdf PDF object.
- * @param string|null $logopath Logo path.
+ * @param string|null $logopath Report/plugin logo path.
  * @return void
  */
-function local_feedbackdashboard_pdf_draw_logo(pdf $pdf, ?string $logopath): void {
-    if ($logopath === null || !is_readable($logopath)) {
-        return;
-    }
+function local_feedbackdashboard_pdf_draw_logo(
+    pdf $pdf,
+    ?string $logopath
+): void {
 
-    $imagesize = @getimagesize($logopath);
+    /*
+     * Right edge used by the logos.
+     */
+    $rightedge =
+        $pdf->getPageWidth() - 12.0;
 
-    if (!is_array($imagesize) || empty($imagesize[0]) || empty($imagesize[1])) {
-        return;
-    }
-
-    $maxwidth = 56.0;
-    $maxheight = 12.5;
-    $scale = min($maxwidth / $imagesize[0], $maxheight / $imagesize[1]);
-
-    $width = max(1.0, $imagesize[0] * $scale);
-    $height = max(1.0, $imagesize[1] * $scale);
-
-    $x = $pdf->getPageWidth() - 12 - $width;
     $y = 12.0;
+    $gap = 5.0;
+
+    /*
+     * -------------------------------------------------------------
+     * Existing report/plugin logo.
+     *
+     * It remains in exactly the same position as before.
+     * -------------------------------------------------------------
+     */
+
+    if (
+        $logopath !== null
+        && is_readable($logopath)
+    ) {
+        $imagesize =
+            @getimagesize($logopath);
+
+        if (
+            is_array($imagesize)
+            && !empty($imagesize[0])
+            && !empty($imagesize[1])
+        ) {
+            $maxwidth = 56.0;
+            $maxheight = 12.5;
+
+            $scale = min(
+                $maxwidth / $imagesize[0],
+                $maxheight / $imagesize[1]
+            );
+
+            $width = max(
+                1.0,
+                $imagesize[0] * $scale
+            );
+
+            $height = max(
+                1.0,
+                $imagesize[1] * $scale
+            );
+
+            $x =
+                $rightedge - $width;
+
+            $pdf->Image(
+                $logopath,
+                $x,
+                $y,
+                $width,
+                $height,
+                '',
+                '',
+                '',
+                false,
+                300
+            );
+
+            /*
+             * The Moodle logo will be placed
+             * to the LEFT of this logo.
+             */
+            $rightedge =
+                $x - $gap;
+        }
+    }
+
+    /*
+     * -------------------------------------------------------------
+     * Moodle institutional logo.
+     * -------------------------------------------------------------
+     */
+
+    $moodlelogopath =
+        local_feedbackdashboard_pdf_find_moodle_logo();
+
+    if (
+        $moodlelogopath === null
+        || !is_readable($moodlelogopath)
+    ) {
+        return;
+    }
+
+    $imagesize =
+        @getimagesize($moodlelogopath);
+
+    if (
+        !is_array($imagesize)
+        || empty($imagesize[0])
+        || empty($imagesize[1])
+    ) {
+        return;
+    }
+
+    /*
+     * Slightly smaller than the report logo
+     * so the two logos remain balanced.
+     */
+    $maxwidth = 46.0;
+    $maxheight = 12.5;
+
+    $scale = min(
+        $maxwidth / $imagesize[0],
+        $maxheight / $imagesize[1]
+    );
+
+    $width = max(
+        1.0,
+        $imagesize[0] * $scale
+    );
+
+    $height = max(
+        1.0,
+        $imagesize[1] * $scale
+    );
+
+    $x =
+        $rightedge - $width;
 
     $pdf->Image(
-    $logopath,
-    $x,
-    $y,
-    $width,
-    $height,
-    '',
-    '',
-    '',
-    false,
-    300
+        $moodlelogopath,
+        $x,
+        $y,
+        $width,
+        $height,
+        '',
+        '',
+        '',
+        false,
+        300
     );
 }
 
