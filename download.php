@@ -218,6 +218,120 @@ function local_feedbackdashboard_pdf_find_logo(): ?string {
 }
 
 /**
+ * Finds the main institutional logo configured in Moodle.
+ *
+ * The logo is read directly from Moodle File API and copied
+ * to a temporary local file so TCPDF can render it reliably.
+ *
+ * @return string|null
+ */
+function local_feedbackdashboard_pdf_find_moodle_logo(): ?string {
+    static $resolved = false;
+    static $cachedpath = null;
+
+    if ($resolved) {
+        return $cachedpath;
+    }
+
+    $resolved = true;
+
+    $context = context_system::instance();
+    $fs = get_file_storage();
+
+    /*
+     * First try the main Moodle logo.
+     * If it does not exist, try the compact logo.
+     */
+    foreach (['logo', 'logocompact'] as $filearea) {
+        $configured = trim(
+            (string) get_config(
+                'core_admin',
+                $filearea
+            )
+        );
+
+        if ($configured === '') {
+            continue;
+        }
+
+        $configured = str_replace(
+            '\\',
+            '/',
+            $configured
+        );
+
+        $filename = basename($configured);
+        $directory = dirname($configured);
+
+        if (
+            $directory === '.'
+            || $directory === '/'
+        ) {
+            $filepath = '/';
+        } else {
+            $filepath =
+                '/'
+                . trim($directory, '/')
+                . '/';
+        }
+
+        $storedfile = $fs->get_file(
+            $context->id,
+            'core_admin',
+            $filearea,
+            0,
+            $filepath,
+            $filename
+        );
+
+        if (
+            !$storedfile
+            || $storedfile->is_directory()
+        ) {
+            continue;
+        }
+
+        $tempdir = make_temp_directory(
+            'local_feedbackdashboard'
+        );
+
+        $extension = strtolower(
+            pathinfo(
+                $filename,
+                PATHINFO_EXTENSION
+            )
+        );
+
+        $tempfilename =
+            'moodle_'
+            . $filearea
+            . '_'
+            . $storedfile->get_contenthash();
+
+        if ($extension !== '') {
+            $tempfilename .= '.' . $extension;
+        }
+
+        $temppath =
+            $tempdir
+            . DIRECTORY_SEPARATOR
+            . $tempfilename;
+
+        if (!is_readable($temppath)) {
+            if (!$storedfile->copy_content_to($temppath)) {
+                continue;
+            }
+        }
+
+        $cachedpath = $temppath;
+
+        return $cachedpath;
+    }
+
+    return null;
+}
+
+/**
  * Draws the company logo in the upper-right corner while preserving aspect ratio.
  *
  * @param pdf $pdf PDF object.
