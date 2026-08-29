@@ -350,7 +350,7 @@ function local_feedbackdashboard_pdf_draw_logo(
         $pdf->getPageWidth() - 12.0;
 
     $y = 12.0;
-    $gap = 5.0;
+    $gap = 9.0;
 
     /*
      * -------------------------------------------------------------
